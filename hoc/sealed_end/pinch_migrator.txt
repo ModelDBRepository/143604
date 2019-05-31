@@ -1,0 +1,31 @@
+Basic scheme
+
+Each simulation has a length determined by a very narrow (pinched)
+diameter at dendrite length X microns from the soma which effectively
+electrically ends the dendrite at this pinch.  For each of these X
+distances there are vectors for the spatial profile of the maximum bAP
+voltage as a function of distance along the dendrite:
+
+max_bAP_ctrl_vec_X.txt
+max_bAP_inhib_vec_X.txt
+
+Another vector, distance.txt contains the distance for each
+corresponding dendrite compartment (segment or node) in the above
+envelope files.
+
+A dendrite_length_vec stores the length of the dendrite for each
+simulation as successive elements.
+
+Spine Ca signal measurements:
+dCa_inhib_vec.txt
+dCa_ctrl_vec.txt
+dCa_ratio_vec.txt
+dendrite_length_vec.txt (associated with above)
+
+Loop over (pinched) lengths of dendrite:
+
+1) calculate control and inhibition bAP envelope's and Ca peaks and
+baselines
+
+2) store vectors in files in folder sealed_end
+

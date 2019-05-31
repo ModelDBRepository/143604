@@ -1,0 +1,68 @@
+20130317
+
+I need to focus on "cleaning" up the model code to make a public
+version for the Science magazine article.
+
+I stored an as-is version as a private model in ModelDB if ever needed
+for future reference.
+
+I want to do two things with the public version.
+
+1) make button pushes to create the basic results
+a) spine inhibition results in a compartmentalized Ca signal inhibition.
+b) dendritic inhibition results in less inhibition amplitude which is
+more widespread.
+
+2) make another button push come up with the research panel which
+includes instructions on how to recreate the figures from the paper
+with button pushes
+
+-----------------------------------------------------------------
+
+Include two readme's
+
+1) the readme.html includes the basic instructions to do 1 above.
+
+2) a readme_research.html includes directions on how to generate the
+paper figures and additional "control" simulations (the sealed end
+effects and the dendritic inhibition combination with spine neck
+resistances that mimic the case where spine inhibition is present (a
+result is that the spine neck resistance would have to be ~24 GOhm,
+more than a factor of 10 greater than the highest neck resistances
+measured (1.2 GOhm) under experimental protocols designed to make the
+resistances as large as possible (Grunditz et al. (2008) (in a
+different cell type, the hippocampal CA1 pyramidal neuron).
+
+The readme.html can state that: Ca signals were compared between
+protocols. The case of bAP alone produces Ca signals in the model
+spine heads and dendritic shaft.  The main simulations that support
+the paper's hypothesis comes about comparing the bAP alone Ca signals
+with two cases 1) inhibition in a spine head combined with a bAP which
+showed that the Ca signal in the spine head was reduced but not in the
+dendritic shaft nor neighboring spines and 2) 10 times the inhibiton
+that was used in the spine head being applied to the dendritic shaft
+adjacent to the spine head (with no spine inhibiton) in combination
+with the bAP produces Ca signals that are slightly reduced in spine
+heads and shaft.  This shows that dendritic inhibition is less
+effective at reducing the Ca signal and that the reduced Ca signal is
+present in nearby spine heads and shaft.
+
+-----------------------------------------------------------------
+
+Button layout
+
+xpanel("Chiu et al. 2013")
+  xlabel("Demonstrations of main result:")
+  xbutton("spine inhibiton with bAP (compartmentalized inhibition)","spineinhib_bAP_demo()")
+  xbutton("10x dend inhib with bAP (widespread inhib with less amplitude","dend10x_bAP_demo()")
+  xbutton("open research panels instead","open_research_panels()")
+xpanel()
+
+Actually the most ideal way to run the model would be to have the
+model start the same except postpone all the gui creations until the
+end that way, the model doesn't have to be restarted.
+
+Process: go through the code and collect all the window creations into
+an open_research_panels() proc. Use the notation "// shadow X" near
+where the old code is and "// view X" where the new code is.  That way
+if there is some kind of dependence it can be traced back.

@@ -1,0 +1,11 @@
+ParmFitness: Unnamed multiple run protocol
+	FitnessPrimitive: Ratio Fitness
+		ratio_fitness()
+
+	Parameters:
+		"global_cm", 0.75, 0.01, 0.75, 1, 1
+		"global_Ra", 200, 200, 20000, 0, 1
+		"global_g_pas", 2.5e-05, 2.5e-05, 0.0025, 0, 1
+		"dendrite.diam", 2, 0.1, 4, 0, 1
+		"Spine[1].neck.diam", 0.07, 0.005, 0.07, 0, 1
+End ParmFitness

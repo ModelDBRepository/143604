@@ -1,0 +1,248 @@
+// specific_cases.hoc
+// This hoc script will run specific cases similar to interactively created
+// in a Shepherd Higley Carnevale Chiu Morse (McDougal) meeting 3/15/12
+// The lines typed into the oc> prompt on that day are interspersed with
+// procedure calls that are equivalent to button clicks with the mouse
+
+// soma delete_section()
+// soma insert pas
+forall e_pas=-65
+forall Ra=200 // 100 // changes from default of 35.4
+forall cm=1
+
+// graphical observations with impedance tool
+
+// now placement of inhibition waveform on the dendritic shaft:
+// position x=0.425 , dendrite, inhibitory[25 ] located at 25.5  microns.
+// note that int(0.425*600/10) equals 25 (L=600)
+// if the length or nseg is changed all bets are off.(have to rethink how
+// to find the index of excitatory or inhibitory synapses on the adjacent
+// dendritic shaft.
+
+adjacent_shaft_index = int(adjacent_shaft_x_loc*dendrite.L/10)
+
+proc neck_diam() {
+  print "setting Spine neck diams to ",$1
+  forsec "neck" { diam = $1 }
+}
+
+objref ic
+objref hh_graph
+
+proc measure_imp() {
+  dendrite ic=new IClamp(0)
+  ic.dur=1
+  ic.amp=.1
+  early_stop=4.325
+  hh_graph=new Graph()
+  run_freqs2(hh_graph)
+}
+
+hh_already_inserted=0
+proc insert_hh() {
+  if (!hh_already_inserted) {
+    forall insert hh
+    hh_already_inserted = -1
+    // a stimulator at the 0 end of the dendrite
+//    dendrite ic=new IClamp(0)
+//    ic.del = 1
+//    ic.dur = 0.5
+//    ic.amp = 0.5
+  }
+}
+objref sr
+rel_max_cond=0
+x_value = 0
+proc hh_level() { // proc called with section reference sr and
+                  // floats (relative_max_conductance, x)
+                  // and attempts to set the hh channel values to defaults
+                  // gnabar_hh=0.12 gkbar_hh=0.036 gl_hh=0.0003 el_hh=-54.3
+                  // except that gl_hh is set to 0 so that the membrane resistivity
+                  // can be controlled seperately (so only gnabar_hh and gkbar_hh
+                  // are effected at the x (range) value on the section sr
+  sr=$o1
+  rel_max_cond = $2
+  x_value = $3
+  sr.sec {
+    gnabar_hh(x_value) = rel_max_cond * (0.12)
+    gkbar_hh( x_value) = rel_max_cond * (0.036)
+    gl_hh(    x_value) = 0
+  }
+}
+
+proc global_hh() { // sets the hh relative conductance to the passed argument
+  forall { 
+    sr=new SectionRef()
+    for (x,0) {
+      hh_level(sr, $1, x)
+     }
+  }
+}
+
+// create a vector for playback into the IClamp to simulate one of Chiayu's experiments
+// where the pulses ilicit APs at times 115, 125, 135, 145, 155 
+
+objref iclamp_vec, iclamp_t_vec, one_pulse_vec
+objref pulse_times_vec
+pulse_times_vec = new Vector()
+pulse_times_vec.append( 115, 125, 135, 145, 155 )
+// typical pulse
+//    ic.del = 1
+//    ic.dur = 0.5
+//    ic.amp = 0.5
+delta_t = 0.5 // ic.del
+amp = 0.5 // ic.amp
+
+proc insert_ca() {
+  forsec "head" {
+    insert cad
+    insert ca
+  }
+}
+// insert_ca()
+
+dt=0.05
+steps_per_ms=20
+// insert_hh()
+// regenerate_iclamp_vec()
+forsec "neck" diam=0.1
+
+proc insert_McCormickYuEtAl() {
+// The below is an excerpt from McCormick, Yu et al. papers accession 135839 except for the value of Ra taken from Mainen et al. 1995
+// Rapid_rising_somatic_spike_soma_axon.hoc
+// where many lines have been deleted and all lines refering to axon and bleb
+// have been commented out or deleted and the dend section name has been
+// changed to dendrite TMM 20120420
+
+// Create the neuron
+rm = 30000
+v_init    = -62.5 // -70 // raised 20121024
+celsius   = 37
+Ek = -80   //-90 might affect the axon spike phase slope value low, and less noisy, increase to be -85?
+           //   maybe not, still need check
+Ena = 60
+ra = 200 // use Mainen et al. 1996 200 instead of 150  //the larger, the soma kink slope large is
+c_m = 0.75 // the optimal value, both increase and decrease will decrease slope value
+           //however, small C value will have high dv/dt value
+xn = 1
+gna = 8000 //7500
+gk = 1600 //1800
+ndend=1  // increase this will increase kink slope
+//create dend[ndend], soma, axon
+//create dend, soma, axon, bleb
+
+gkm = .3// .3   //.3~ 0.5
+gca = .3//.3   //.3~ 0.5
+gkca = .3// 3  //.3~ 0.5
+
+gca_soma = gca
+gkm_soma = gkm
+gkca_soma = gkca
+
+//  dend {
+//         L=3000   //there some optimal length make stronger kink?
+//         nseg=L/50    //don't why increase or decrease nseg will decrease slope
+//         diam = 5    //sure this is also optimal value; increase this strenth the kink and biphase
+//          }
+
+//soma {
+//    L=30         //increase size make stronger kink
+//    nseg=L/5
+//    diam = 20/
+//}
+
+//axon {
+//    L=50
+//    nseg=L/5
+//    //diam=1
+////    diam(0:0.1) = 2:1 // weeken the biphase, but looks closer to the real data
+////    diam(0.1:1) = 1:1 // weeken the biphase, but looks closer to the real data
+//    diam=1
+//}
+
+//   connect dend(1), soma(0)
+//   connect axon(0), soma(1)
+//   connect bleb(0), axon(1)
+
+// proc init_cell() {
+      forall {
+// already              insert pas
+              Ra = ra
+              cm = c_m
+              g_pas = 1/rm
+              e_pas = v_init
+              }
+//              bleb g_pas = 1/rm // 5/rm
+//            axon cm=c_m*0.75
+            soma cm=c_m
+//            bleb cm = c_m*0.75
+
+      forall insert na             
+             soma.gbar_na = 0.1*gna  //750 //gna/8 // increase this will increase dv/dt amplitude, but weak kink value
+//             axon.gbar_na = gna //7500
+//             bleb.gbar_na = gna/3 //3000 //gna/3
+             dendrite.gbar_na = 20 //100 //10 //increase this will make cell has spontaneous spikes.
+      
+      forall insert kv
+             soma.gbar_kv = gk/5 //250 //gk/2 // increase this will increase dv/dt amplitude and weak biphase
+//             axon.gbar_kv = gk
+//              bleb.gbar_kv = gk/3 //gk/2
+             dendrite.gbar_kv=10
+             
+           forall {
+            insert km    gbar_km  = 0 //gkm
+	    insert kca   gbar_kca = 0 //gkca
+    	    insert ca    gbar_ca = 0 //gca
+    	    insert cad
+             }
+ //            axon gbar_km=0
+ //            bleb gbar_km=0
+             
+ //            axon gbar_kca=0
+ //            bleb gbar_kca=0
+             
+ //            axon gbar_ca=0
+ //            bleb gbar_ca=0
+              
+      forall if(ismembrane("ca_ion")) {
+               eca = 140
+               ion_style("ca_ion",0,1,0,0,0)
+               vshift_ca = 0
+  }
+             
+   
+      forall if(ismembrane("k_ion")) ek = Ek
+      forall if(ismembrane("na_ion")) {
+                ena = Ena
+                // seems to be necessary for 3d cells to shift Na kinetics -5 mV
+                vshift_na = -6 //-5
+                                      }
+// end of McCormick Yu et al. excerpt
+// because the current ca that we were interested in was
+// turned off we turn it on
+forall if (ismembrane("ca")) {
+  gbar_ca=1e-3 // arbitrary value small enough to not matter electrically
+  }
+}
+
+insert_McCormickYuEtAl()
+
+// must be loaded after cai exists
+load_file("ca_graph.ses")
+
+//xpanel("IClamp for hyperpol")
+//  xbutton("Hyperpolarizing current from IClamp[0]", "hyperpol_iclamp_on()")
+//  xbutton("Turn off hyperpolarizing current from IClamp[0]","hyperpol_iclamp_off()")
+//xpanel()
+
+//proc hyperpol_iclamp_on() {
+//  IClamp[0].del=0
+//  IClamp[0].dur=1e6
+//  IClamp[0].amp=-0.008 // found to hyperpol cell soma to -85 mV
+//}
+//proc hyperpol_iclamp_off() {
+//  IClamp[0].del=0
+//  IClamp[0].dur=1e6
+//  IClamp[0].amp=-0.00 // turn off
+//}
+

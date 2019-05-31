@@ -1,0 +1,254 @@
+// systematic_explorations.hoc
+// Explore what ranges of parameters leads to which changes in inhibition.
+// How robust is the model to perturbations in parameters.
+/*
+Parameters to check:
+
+membrane capacitance, cm
+axial resistance, Ra
+resting leak conductance, gbar_pas
+
+Where "parameter" appears below it refers to one at a time of "cm",
+"Ra", gbar_pas", etc.
+
+What ranges of the parameters gives a 10, 15, 20% change in
+dCa_inhib/dCa_ctrl?
+
+Output Folder results:
+
+systematic_explorations/cm_statistics.txt
+systematic_explorations/Ra_statistics.txt
+systematic_explorations/gbar_pas_statistics.txt
+
+where ctrl_or_inhib is bAP or bAPspineinhib
+
+See where the 10, 15, 20% levels fall for the selected parameters by
+using the multiple run fitter and praxis.
+
+Just calculate the dCa_inhib/dCa_ctrl and record that in a results_vec
+that is paired with a param_vec.
+*/
+
+/* Initially set up manually for cm where the error function has ratio
+involved where ratio is defined:
+
+ratio = dCa_inhib/dCa_ctrl
+
+And ratio_0 is defined as ratio for the default model parameters.  The
+error function as a function of a fixed percent and the model
+parameter to be optimized over is defined to be
+
+error(percent, parameter) = abs( ratio - (1+percent/100) * ratio_0) *
+                          abs( ratio - (1 - percent/100) * ratio_0)
+
+When the current model ratio is a percent above the original ratio or
+below the original the error drops to zero.  Check latter that the
+ratio is inbetween the original ratio and the boundary ratio for
+values of the parameter between the default and the optimized value.
+
+create a function ratio_calc(cai_inhib_vec, cai_ctrl_vec, t_vec,
+t_baseline, t_window) where the inside calcium concentration recorded
+vectors in inhibited and controlled cases are passed along with the
+time points they are recorded at and the baseline time t (which
+presumably occurs right before stimulation of the model).  t_windows
+refers to the length of time after the baseline that the max Ca2+
+value is expected to occur.  This may eliminate the comparison of
+subsequent APs Ca2+ values.
+
+Sample values:
+t_baseline = 99.9
+t_window = 45 //  (approximately 145-99.9)
+
+*/
+
+/* every time a parameter ratio is calculated graph the (parameter,
+ratio) pair.  This may help in gaining insight into the behaviour of
+the model with respect to the parameter.
+
+Start with some recent code that calculates the ratio.  The last code
+that I made that does this was:
+
+dend_shaft_bAP_functions.hoc
+
+Base the fitness function, fitness_ratio() on the negative of the above error function which is calculated by:
+
+Run the model twice, once with bAP, and secondly bAP plus inhib.  For
+the compartment receiving inhibition calculate the ratio by passing
+the recorded vec values and parameters to ratio_calc() (see above).
+
+*/
+// code borrowed from dend_shaft_bAP_functions.hoc:
+
+strdef proto_dir
+strdef filename
+objref f // temporary file object
+// f = new File()
+
+objref dend_v_vec, spine0_v_vec, spine1_v_vec, spine2_v_vec
+objref dend_cai_vec, spine0_cai_vec, spine1_cai_vec, spine2_cai_vec
+// tstop= 1 // test condition
+// below are graphs (the 5 conditions turned into 6 with the addition
+// of protocol bAP + 1x inhibition in dendrite
+// num_of_conditions = 10 // ctrl and inhib for 1,1/2,1/4,1/8,1/16 // 18
+// objref  graphs_v[num_of_conditions], graphs_ca[num_of_conditions], graphs_gates[num_of_conditions]
+// objref graph_bAP_envelopes
+// add the activation and inactivation curves for the ca chan in spines and dend
+objref m_ca_dend_vec, h_ca_dend_vec, m_ca_spine1_vec, h_ca_spine1_vec
+objref  m_ca_spine0_vec, h_ca_spine0_vec
+objref bAP_peak_v_vec, bAP_peak_v_x_vec, bAP_profile_vec
+
+objref t_vec
+/* 
+for i=0, num_of_conditions-1 {
+  graphs_v[i] = new Graph(0)
+  graphs_ca[i] = new Graph(0)
+  graphs_gates[i] = new Graph(0)
+}
+graph_bAP_envelopes = new Graph()
+
+proto_num=0  // index into above graphs of protocol results
+*/
+
+proc setup_vectors_to_record() {
+// record voltages in the dendrite and the Spine[X].head X=0,1,2 (corresponds to paper spines 1 2 3)
+  dend_v_vec = new Vector()
+  dend_cai_vec= new Vector()
+
+  spine0_v_vec= new Vector()
+  spine1_v_vec= new Vector()
+  spine2_v_vec= new Vector()
+  spine0_cai_vec = new Vector()
+  spine1_cai_vec = new Vector()
+  spine2_cai_vec = new Vector()
+
+  m_ca_dend_vec = new Vector()
+  h_ca_dend_vec = new Vector()
+  m_ca_spine1_vec = new Vector()
+  h_ca_spine1_vec = new Vector()
+  m_ca_spine0_vec = new Vector()
+  h_ca_spine0_vec = new Vector()
+  bAP_peak_v_vec = new Vector()
+  bAP_peak_v_x_vec = new Vector()
+  t_vec = new Vector()
+  t_vec.indgen(0, tstop, dt)
+
+  spinelocation=adjacent_shaft_x_loc // record the dendrite where Spine[1] is attached
+  sprint(tmpstr, "dendrite.v(%f)", adjacent_shaft_x_loc) // used to be 180/dendrite.L
+  dend_v_vec.label(tmpstr)
+  spine0_v_vec.label("Spine[0].head.v(0.5)")
+  spine1_v_vec.label("Spine[1].head.v(0.5)")
+  spine2_v_vec.label("Spine[2].head.v(0.5)")
+
+  sprint(tmpstr,"dendrite.cai(%g)", spinelocation) // dend. comp. adj. to spine
+  dend_cai_vec.label(tmpstr)
+  spine0_cai_vec.label("Spine[0].head.cai(0.5)")
+  spine1_cai_vec.label("Spine[1].head.cai(0.5)")
+  spine2_cai_vec.label("Spine[2].head.cai(0.5)")
+
+  sprint(tmpstr,"dendrite.m_ca(%g)", spinelocation) // dend. comp. adj. to spine
+  m_ca_dend_vec.label(tmpstr)
+  sprint(tmpstr,"dendrite.h_ca(%g)", spinelocation) // dend. comp. adj. to spine
+  h_ca_dend_vec.label(tmpstr)
+  m_ca_spine1_vec.label("Spine[1].head.m_ca(0.5)")
+  h_ca_spine1_vec.label("Spine[1].head.h_ca(0.5)")
+  m_ca_spine0_vec.label("Spine[0].head.m_ca(0.5)")
+  h_ca_spine0_vec.label("Spine[0].head.h_ca(0.5)")
+
+  dend_v_vec.record(&dendrite.v(spinelocation), t_vec)
+  dend_cai_vec.record(&dendrite.cai(spinelocation), t_vec)
+
+  spine0_v_vec.record(&Spine[0].head.v(0.5), t_vec)
+  spine1_v_vec.record(&Spine[1].head.v(0.5), t_vec)
+  spine2_v_vec.record(&Spine[2].head.v(0.5), t_vec)
+
+  spine0_cai_vec.record(&Spine[0].head.cai(0.5), t_vec)
+  spine1_cai_vec.record(&Spine[1].head.cai(0.5), t_vec)
+  spine2_cai_vec.record(&Spine[2].head.cai(0.5), t_vec)
+
+  m_ca_dend_vec.record(&dendrite.m_ca(spinelocation), t_vec)
+  h_ca_dend_vec.record(&dendrite.h_ca(spinelocation), t_vec)
+  m_ca_spine1_vec.record(&Spine[1].head.m_ca(0.5), t_vec)
+  h_ca_spine1_vec.record(&Spine[1].head.h_ca(0.5), t_vec)
+  m_ca_spine0_vec.record(&Spine[0].head.m_ca(0.5), t_vec)
+  h_ca_spine0_vec.record(&Spine[0].head.h_ca(0.5), t_vec)
+}
+// code not from dend_shaft_inhib_functions.hoc:
+objref cai_inhib_vec, cai_ctrl_vec, t_vec
+cai_inhib_vec = new Vector()
+cai_ctrl_vec = new Vector()
+t_vec = new Vector()
+ratio_0 = 1 // declare.  Get's replaced with function call after below defintion.
+percent = 10 // declare.  Run over values latter.
+
+// ratio_calc(cai_inhib_vec $o1, cai_ctrl_vec $o2, t_vec $o3, t_baseline $4, t_window $5)
+func ratio_calc() { local t_baseline, t_window
+  cai_inhib_vec = $o1
+  cai_ctrl_vec = $o2
+  t_vec = $o3
+  t_baseline=$4
+  t_window=$5
+  prestimulus_time=t_baseline
+  prestimulus_index=prestimulus_time/dt // 1998, the 1999th element for dt=.05
+  index_end = (t_baseline +t_window)/dt // for 150/dt  might be 3000 (dt=0.05) or 6000 (dt=0.025) to find
+                     // an index after the first AP but hopefully before
+                     // the second if another AP should occur
+  spine1_B_ctrl=cai_ctrl_vec.x[prestimulus_index]
+  spine1_B_inhib=cai_inhib_vec.x[prestimulus_index]
+  spine1_Ca_peak_ctrl = cai_ctrl_vec.c(prestimulus_index,index_end).max()
+  spine1_Ca_peak_inhib = cai_inhib_vec.c(prestimulus_index,index_end).max()
+
+  spine1_dCa_ratio = (spine1_Ca_peak_inhib-spine1_B_inhib)/(spine1_Ca_peak_ctrl-spine1_B_ctrl)
+  return spine1_dCa_ratio
+}
+
+// global_param or parameter to study is set to an initial (default) value here
+global_cm = .75
+global_Ra = 200
+global_g_pas = 2.5e-05
+func ratio_fitness() {
+  // First make sure that the global_param value is assigned to
+  // its appropriate places
+  print "ratio_fitness start:"
+  print "global_cm=", global_cm,", global_Ra=",global_Ra,", global_g_pas=",global_g_pas,", dendrite.diam(.5)=",dendrite.diam(.5),", Spine[1].neck.diam(.5)=",Spine[1].neck.diam(0.5)
+  forall {cm = global_cm}
+  forall {Ra = global_Ra}
+  forall {g_pas = global_g_pas}
+
+  // Now run model to calculate and return fitness
+  // turn on bAP only and have no inhibition
+  // turn on bAP
+  MultIClamp[0].number=1 // turn on current injection that creates bAP
+  for nc_index=0,3 {
+    NC[nc_index].weight = 0.0 // 0.0004 is 0.4 nS (0 dend and 1,2,3 spine synapses off)
+  }
+  // run_model
+  tstop = 151
+  setup_vectors_to_record()
+  init()
+  run()
+  // save appropriate ctrl cai vector
+  cai_ctrl_vec = spine1_cai_vec.c
+  // leave bAP on and inhibit the spine
+  NC[2].weight = 0.0004 // 0.0004 (uS) is 0.4 nS (0 dend and 1,2,3 spine synapses off)
+  // run_model
+  setup_vectors_to_record()
+  init()
+  run()
+  // save appropriate inhib cai vector
+  cai_inhib_vec = spine1_cai_vec.c
+  // calculate ratio
+  t_baseline = 99.9
+  t_window = 50 // search for cai maxs between t_baseline to t_baseline + t_window
+  ratio = ratio_calc(cai_inhib_vec, cai_ctrl_vec, t_vec, t_baseline, t_window)
+  // calculate error function
+  error = abs( ratio - (1+percent/100) * ratio_0) * abs( ratio - (1 - percent/100) * ratio_0)
+  // return fitness value as error - (accidentally called error func a fitness func.)
+  print "for cm=", global_cm,", the dCa_ratio = ",ratio," and the error function is ", error
+  return error
+}
+
+// the first fitness value is garbage because ratio_0 is not set
+// properly until ratio_fitness called and ratio_0 is set properly
+// below: calculate the default ratio called ratio_0
+dummy_fitness_value = ratio_fitness() // calculated with default parameters
+ratio_0 = ratio

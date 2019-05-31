@@ -1,0 +1,353 @@
+/*
+Makes a panel (2D array) of graphs that display the effects of
+varying two parameters on simulation results.
+*/
+
+load_file("nrngui.hoc")
+
+/*
+This program loads a file that sets up the model that is to be simulated.
+
+The model setup code is assumed to provide a proc shift() that can be 
+called with two numerical arguments, e.g.
+shift(a,b)
+shifts the voltage-dependence of the gating variables m and h
+by a and b, respectively.
+It is also expected to have a proc spinh() that ensures that model parameters
+are correct for this particular series of simulations.
+
+For example, proc shift() in initcav31y.hoc is 
+proc shift() {
+  forall {
+    mshift_cav31= $1
+    hshift_cav31= $2
+  }
+}
+and the NMODL source code for the density mechanism cav31 contains
+these statements:
+NEURON {
+  . . .
+  GLOBAL mshift, hshift
+}
+PARAMETER  {
+  . . .
+  mshift = 0 (mV)
+  hshift = 0 (mV)
+}
+PROCEDURE rates() {
+  . . .
+  minf = 1 /(1+exp(-((v-mshift)+42.9)/5.16))
+  . . .
+  if((v-mshift) < -5.95){
+:    mtau = -0.856 + 1.494*exp(-v/27.4)
+    mtau = -0.856 + 1.494*exp(-(v-mshift)/27.4)
+  } else {
+    mtau = 1.0
+  }
+  . . . etc. for hshift's effect on hinf and htau . . .
+}
+
+Finally, initcav31y.hoc proc spinh() is
+proc spinh() {
+  tstop = 150
+  tstop_changed()
+  ns.number = 1
+  ns.start = 10
+  nc.weight = 4e-4
+  stim.del = 30 // ms
+  stim.dur = 0.1 // ms
+  stim.amp = 1.8 // nA
+}
+*/
+
+strdef MODEL // name of file that sets up the model
+// MODEL = "initcav31y.hoc"
+// MODEL = "initcav33y.hoc"
+//MODEL = "mosinit.hoc"  // instead have mosinit.hoc call this file
+// if desired
+
+objref gpanel // will be a "panel" of graphs
+  // implemented as an HBox that contains a bunch of VBoxes
+objref pglist // a List that will hold the panel's Graphs
+pglist = new List()
+
+NUMV = 5 // # of vBoxes in the panel (# of graphs along the panel's x axis)
+NUMG = 5 // # of Graphs in each vBox (# of graphs along the panel's y axis)
+XGSIZE = 160 // 120 // width . . .
+YGSIZE = 140 // 100 //  . . . and height of each Graph
+
+///// set up a gpanel
+
+/*
+makes a graph at specified location with specified size
+$1  xloc
+$2  yloc
+$3  width
+$4  height
+returns objref that points to the graph
+*/
+obfunc makeg() { localobj tobj
+  tobj = new Graph(0)
+  tobj.size(0,5,-80,40)
+  tobj.view(0, -80, 5, 120, $1, $2, $3, $4)
+  return tobj
+}
+
+proc makeone() { local ii  localobj str
+  str = new String()
+  ii = pglist.append(makeg(0,0,XGSIZE,YGSIZE))
+  sprint(str.s,"fig %d",ii-1)
+  pglist.o(ii-1).label(0.2, 0.3, str.s)
+  // doesn't need to return anything
+}
+
+proc makevbox() { local ii  localobj vbox
+  vbox = new VBox()
+  vbox.intercept(1)
+  for ii=0,$1-1 makeone()
+  vbox.intercept(0)
+  vbox.map()
+  // doesn't need to return anything
+}
+
+obfunc makegpanel() { local ii,jj  localobj gp
+  gp = new HBox()
+  gp.intercept(1)
+  for ii=0,$1-1 {
+    makevbox($2)
+  }
+  gp.intercept(0)
+  gp.map()
+  return gp
+}
+
+gpanel = makegpanel(NUMV, NUMG)
+
+
+///// at last, the model cell
+
+// load_file(MODEL) // instead this file is called by mosinit.hoc
+
+//spinh() // so params are appropriate
+
+//load_file("vhd.ses") // show v in spine and adjacent dendrite
+  // this really belongs in the other file
+
+///// simulation control
+///// run simulations and fill the graphs with results
+
+/*
+index = 0
+for each x value
+  for each y value
+    run simulation
+    plot results in pglist.o(index)
+    index+=1
+*/
+
+objref tvec, cadvec, cahvec, mvec, hvec, m_inhibvec, h_inhibvec
+tvec = new Vector()
+cadvec = new Vector() // to capture time course of cai in dendrite
+cahvec = new Vector() //    and spine head
+mvec = new Vector()
+hvec = new Vector()
+m_inhibvec = new Vector()
+h_inhibvec = new Vector()
+
+objref cadveclist,cahveclist,tveclist,mveclist,hveclist,m_inhibveclist,h_inhibveclist
+cadveclist = new List() // to hold the time courses from all simulations
+cahveclist = new List()
+tveclist = new List()
+mveclist = new List()
+hveclist = new List()
+m_inhibveclist = new List()
+h_inhibveclist = new List()
+
+proc shift() {
+  // note that a minus sign is included in the vshift_ca setting below
+  // because the vshift_ca is added to the membrane voltage which has
+  // the opposite effect of shifting the activation curve.  For example
+  // if the membrane voltage was -50 and we added vshift = -20 to it
+  // we would get v=-70 so that where the activation is read out at
+  // at -70 is as though we shifted the activation 20 mV to the right
+  // if we considered keeping the v=-50.
+  mshift_ca = 0 // if shifting vshift make sure mshift is 0
+  vshift_ca = -$1 // global variable (changes for all instances)
+  Exp2Syn[2].e = $2 // middle spines gabaa synapse reversal potential
+}
+proc shift_m() {
+  // note that a minus sign is included in the vshift_ca setting below
+  // because the vshift_ca is added to the membrane voltage which has
+  // the opposite effect of shifting the activation curve.  For example
+  // if the membrane voltage was -50 and we added vshift = -20 to it
+  // we would get v=-70 so that where the activation is read out at
+  // at -70 is as though we shifted the activation 20 mV to the right
+  // if we considered keeping the v=-50.
+  vshift_ca = 0 // if shifting mshift make sure vshift is 0
+  mshift_ca = -$1 // global variable (changes for all instances)
+  Exp2Syn[2].e = $2 // middle spines gabaa synapse reversal potential
+}
+
+load_file("hoc/int2mstr.hoc") // converts neg ints into m-prefix strdef mstr
+strdef mstr1, mstr2 // temporary string to handle negative sign in file name
+proc batrun() { local index, mshift, hshift
+  // debugging time step (big steps)
+  steps_per_ms = 10
+  dt=0.1
+
+  // first switch to high neck resistance state:
+  forsec "neck" {diam=0.05}
+  forsec "neck" {Ra=200}
+  // see fig1.hoc for key for spine_choice:
+  // turn on inhibition in Spine[1].head, Spine[spine_choice].head
+  NC[spine_choice].weight = 0.0004 // 4e-4 uS = 0.4 nS
+
+  cadveclist = new List()
+  cahveclist = new List()
+  tveclist = new List()
+  mveclist = new List()
+  hveclist = new List()
+  m_inhibveclist = new List()
+  h_inhibveclist = new List()
+
+  tvec = new Vector()
+  tvec.record(&t)
+  cadvec = new Vector()
+  cahvec = new Vector()
+  mvec = new Vector()
+  hvec = new Vector()
+  m_inhibvec = new Vector()
+  h_inhibvec = new Vector()
+// teds dend[0] cadvec.record(&cai(0.1))
+// teds  head[0] cahvec.record(&cai(0.5))
+//  dendrite cadvec.record(&cai(181/L)) // 181/L =x adjacent to Spine[1] neck
+// let cadvec record the other spine head, an aprox. uninhibited equivalent
+  if (mh_Ca_or_V==2) {  // if true graph m,h
+    Spine[0].head mvec.record(&m_ca(0.5))
+    Spine[0].head hvec.record(&h_ca(0.5))
+    Spine[1].head m_inhibvec.record(&m_ca(0.5))
+    Spine[1].head h_inhibvec.record(&h_ca(0.5))
+  }
+  if (mh_Ca_or_V==1) {  // if true graph Ca
+    Spine[0].head cadvec.record(&cai(0.5))
+    Spine[1].head cahvec.record(&cai(0.5))
+  }
+  if (mh_Ca_or_V==0) {  // if true graph V
+    Spine[0].head cadvec.record(&v(0.5))
+    Spine[1].head cahvec.record(&v(0.5))
+  }
+  index = 0
+  for (mshift=-20; mshift<=-20+10*(NUMV-1); mshift+=10) {
+ //   for (hshift=-20; hshift<=-20+10*(NUMG-1); hshift+=10) {
+   for (hshift=-80; hshift<=-80+10*(NUMG-1); hshift+=10) {// role of E_Cl
+      if (m_or_all) {
+        shift_m(mshift, hshift)  // shift only the activation curve, m
+      } else {
+        shift(mshift, hshift)  // shift all the curves in ca
+      }
+      run()
+/*
+      cadvec.plot(pglist.o(index), tvec)
+      cahvec.plot(pglist.o(index), tvec)
+*/
+      tveclist.append(tvec.c())
+      if (mh_Ca_or_V<2) { // graphs either Ca or V with these
+        cadveclist.append(cadvec.c())
+        cahveclist.append(cahvec.c())
+        // plot the copies of the Vectors
+        cadveclist.o(index).plot(pglist.o(index), tveclist.o(index))
+        cahveclist.o(index).plot(pglist.o(index), tveclist.o(index),2,1)
+      } else {  // if ==2 then graph m,h)
+        mveclist.append(mvec.c())
+        hveclist.append(hvec.c())
+        m_inhibveclist.append(m_inhibvec.c())
+        h_inhibveclist.append(h_inhibvec.c())
+        // plot the copies of the Vectors
+        mveclist.o(index).plot(pglist.o(index), tveclist.o(index),1,1)
+        hveclist.o(index).plot(pglist.o(index), tveclist.o(index),3,1)
+        m_inhibveclist.o(index).plot(pglist.o(index), tveclist.o(index),2,1)
+        h_inhibveclist.o(index).plot(pglist.o(index), tveclist.o(index),7,1)
+      }
+
+// store vectors (here is a simple example of write_vec(filename, vec, vec)
+//      write_vec("fig1/head0.dat",t_vec, head0_cai_vec)
+      // first take care of converting -20 to "m20" for file names etc.
+      int2mstr(mshift)
+      mstr1=mstr
+      int2mstr(hshift)
+      mstr2=mstr
+      if (mh_Ca_or_V==2) {  // if true graph m,h
+        sprint(tmpstr,"figSuppl/mSpineLeft_%s_mshift_%s_E_Cl.dat",mstr1, mstr2)
+        write_vec(tmpstr,tveclist.o(index), mveclist.o(index))
+        sprint(tmpstr,"figSuppl/hSpineLeft_%s_mshift_%s_E_Cl.dat",mstr1, mstr2)
+        write_vec(tmpstr,tveclist.o(index), hveclist.o(index))
+        sprint(tmpstr,"figSuppl/mSpineMiddle_%s_mshift_%s_E_Cl.dat",mstr1, mstr2)
+        write_vec(tmpstr,tveclist.o(index), m_inhibveclist.o(index))
+        sprint(tmpstr,"figSuppl/hSpineMiddle_%s_mshift_%s_E_Cl.dat",mstr1, mstr2)
+        write_vec(tmpstr,tveclist.o(index), h_inhibveclist.o(index))
+      }
+      if (mh_Ca_or_V==1) {  // if true graph Ca
+        sprint(tmpstr,"figSuppl/CaSpineLeft_%s_mshift_%s_E_Cl.dat",mstr1, mstr2)
+        write_vec(tmpstr,tveclist.o(index), cadveclist.o(index))
+        sprint(tmpstr,"figSuppl/CaSpineMiddle_%s_mshift_%s_E_Cl.dat",mstr1, mstr2)
+        write_vec(tmpstr,tveclist.o(index), cahveclist.o(index))
+      }
+     if (mh_Ca_or_V==0) {  // if true graph V
+        sprint(tmpstr,"figSuppl/vSpineLeft_%s_mshift_%s_E_Cl.dat",mstr1, mstr2)
+        write_vec(tmpstr,tveclist.o(index), cadveclist.o(index))
+        sprint(tmpstr,"figSuppl/vSpineMiddle_%s_mshift_%s_E_Cl.dat",mstr1, mstr2)
+        write_vec(tmpstr,tveclist.o(index), cahveclist.o(index))
+      }
+
+      sprint(tmpstr,"mshift=%3.0f, E_Cl=%3.0f",mshift, hshift)
+      pglist.o(index).label(.15,.91,tmpstr)
+
+      // specify viewport
+      // for now the simplest
+      if (mh_Ca_or_V) {  // if true graph Ca, and if false graph V's
+        pglist.o(index).exec_menu("View = plot")
+      } else {
+        pglist.o(index).size(100,130,-80, 20)
+      }
+      index+=1
+    }
+  }
+}
+
+///// convenience stuff for scaling graph axes
+
+// $1 is max y axis value
+proc setsize() { local i
+  for i=0,pglist.count()-1 pglist.o(i).size(0,150,0,$1)
+}
+
+proc veqp() { local i
+  for i=0,pglist.count()-1 pglist.o(i).exec_menu("View = plot")
+}
+
+yscale = -1
+
+proc setscale() {
+  if ($1<=0) {
+    veqp()
+  } else {
+    setsize($1)
+  }
+}
+mh_Ca_or_V=0
+m_or_all = 0
+{
+xpanel("Controls", 0)
+xbutton("Batch run","batrun()")
+xvalue("mh_Ca_or_V")
+xlabel("mh_Ca_or_V=2 graphs m,h; mh_Ca_or_V=1 graphs Ca; mh_Ca_or_V=0 graphs V") 
+xvalue("m_or_all")
+xlabel("m_or_all=1 shifts only m, m_or_all=0 shifts all Ca curves") 
+xvalue("Set y axis", "yscale", 1,"setscale(yscale)", 0, 1)
+xlabel("(autoscales if <= 0)") 
+xpanel(227,704)
+}
+
+// this command will zoom in on the APs for the m,h panels:
+// for i=0,pglist.count()-1 pglist.o(i).size(100,150,0,1)
+

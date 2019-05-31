@@ -1,0 +1,43 @@
+objref tmpsr
+dendrite tmpsr=new SectionRef()
+// now tmpsr refers (pointer) to the dendrite section
+
+objref spineref[7]
+// ruler mm locations from figure 
+// 4.4, 5.2, 5.7, 6.9
+//             6.0, 7.3, 8.8
+//  multiple by 3 for conversion to microns
+objref spine_location_vec
+spine_location_vec= new Vector()
+// f=3 // factor to multiply mm in figure printout to get microns along real dendr.
+// if (multiple_spines) {
+//  spine_location_vec.append(4.4*f, 5.2*f, 5.7*f, 6.0*f, 6.9*f, 7.3*f, 8.8*f)
+//  } else {
+//  spine_location_vec.append(4.4*f)
+//}
+// spine_location_vec.append(30)
+
+// about_half=600*(29.5/60) // nseg arithmetic gives x point near center
+// spine_location_vec.append(about_half,about_half-2*(dendrite.L/dendrite.nseg))
+adjacent_shaft_x_loc = 0 // reassigned to first spine neck dendrite x location
+
+//spine_location_vec.append( 172, 178, 191 ) // for 20120330
+//spine_location_vec.append( 172, 191, 191 ) // for 20120518
+//spine_location_vec.append( 170, 180, 190 ) // for 20120518 through 20120708
+spine_location_vec.append( 90,100,110) // for 20120709, 20121008
+
+for i=0, spine_location_vec.size()-1 {
+  print "Placing a spine at ", spine_location_vec.x[i]," microns, which has an x value of ", spine_location_vec.x[i]/dendrite.L
+
+  spineref[i] = new Spine(tmpsr, spine_location_vec.x[i]/dendrite.L)
+  if (i==1) { // prior to 20121008 was set to i==0
+    adjacent_shaft_x_loc = spine_location_vec.x[i]/dendrite.L
+    print "adjacent dendritic shaft x location = ", adjacent_shaft_x_loc
+  }
+}
+
+// spine geometry
+
+forsec "neck" { diam =.1 L=1 }
+forsec "head" { diam=1 L=1 }
+

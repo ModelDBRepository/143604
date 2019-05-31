@@ -1,0 +1,217 @@
+// parameter_ranges.hoc
+
+/* This program finds the values of the
+inhibitied spine and dendrite dCa_ratios for ranges of parameters of
+the model.
+
+Some main results of the model:
+
+1. An inhibited spine compartmentalizes the inhibition during combined
+bAP and spine inhibition.
+
+2. Under dendritic inhibition a dendrite show comparitively less
+inhibition than spine inhibition and the inhibition is not localized
+to the same degree as inhibition in a spine head.
+
+To demonstrate the robustness of the model these results are confirmed
+under ranges of parameters of the model.
+
+The results will be written in folders under a "./results/" folder
+
+(spine_or_dend_inhib)_(param_str)_(compartment)_dCa_ratio.txt
+
+where (spine_or_dend_inhib) is spine or dend
+
+where (param_str) is one of these 5 so far: cm, Ra, g_pas, ddiam
+(dendrite.diam), sdiam (Spine[1].neck.diam)
+
+and (compartment) is spine0, spine1, spine2, dend.
+
+so an example is spine_cm_spine1_dCa_ratio.txt
+
+the data files are two column with the first being the value of the parameter for that ratio
+
+ranges:
+
+cm: .246 1.15
+Ra:  100 300
+g_pas: 0 2.5e-4
+ddiam: .5 2.5
+sdiam: .02 .2
+
+*/
+
+// points = f(i; A, k, N) = A *exp(k*i/N)
+// i is a iterative variable that goes over 0 to N
+// a1 = f(0), a2 = f(1)
+
+func exp_axis() { local k, A
+ // a1 = $1, a2 = $2, i/N  = $3
+  k = log($2/$1)
+  A = $1
+  return A * exp( k * $3 )
+}
+
+Num_of_params = 5 // cm, Ra, g_pas, dendrite.diam, Spine[1].neck.diam
+Num_of_values = 10 // 10 values typical for each of the five parameters studied
+// spines and dendrite dCa result vectors
+objref s0_dCa_ratio[Num_of_params], s1_dCa_ratio[Num_of_params], s2_dCa_ratio[Num_of_params], d_dCa_ratio[Num_of_params]
+objref param_xaxis[Num_of_params] // hold parameter values for graphing above vectors with
+objref graph_result[2*Num_of_params] // one graph for spine inhib another for dend inhib
+
+for param_index= 0, Num_of_params-1 { // so far 5 params to examine with Num_of_values values each
+  s0_dCa_ratio[param_index] = new Vector(Num_of_values)
+  s1_dCa_ratio[param_index] = new Vector(Num_of_values)
+  s2_dCa_ratio[param_index] = new Vector(Num_of_values)
+  d_dCa_ratio[param_index] = new Vector(Num_of_values)
+  param_xaxis[param_index] = new Vector(Num_of_values)
+  graph_result[param_index] = new Graph()
+  graph_result[param_index+Num_of_params] = new Graph()
+}
+
+
+strdef protocol_str, param_str
+spine_or_dendrite = 0
+param_index = 0
+
+// for a particular param_index(0-4), protocol_str(spine or dend),
+// param_str(cm,Ra,g_pas,ddiam,sdiam) 
+//
+// spine_or_dendrite 0 or 1 inhibition type identifier (hopefully
+// always) matchs protocol_str
+graph_index=0
+proc output_results() { 
+  sprint(tmpstr,"../../results/%s_%s_spine0_dCa_ratio.dat", protocol_str, param_str)
+  write_vec(tmpstr,param_xaxis[param_index], s0_dCa_ratio[param_index])
+
+  sprint(tmpstr,"../../results/%s_%s_spine1_dCa_ratio.dat", protocol_str, param_str)
+  write_vec(tmpstr,param_xaxis[param_index], s1_dCa_ratio[param_index])
+
+  sprint(tmpstr,"../../results/%s_%s_spine2_dCa_ratio.dat", protocol_str, param_str)
+  write_vec(tmpstr,param_xaxis[param_index], s2_dCa_ratio[param_index])
+
+  sprint(tmpstr,"../../results/%s_%s_dend_dCa_ratio.dat", protocol_str, param_str)
+  write_vec(tmpstr,param_xaxis[param_index], d_dCa_ratio[param_index])
+
+  // graph results
+  // colors are 1 black, 2 red, 3 blue, 4 green (second from last argument in line methods)
+  s0_dCa_ratio[param_index].line(graph_result[graph_index], param_xaxis[param_index], 1, 1)
+  if (spine_or_dendrite) { // true (1) if dend
+    // inhib in dend so dend is red
+    s1_dCa_ratio[param_index].line(graph_result[graph_index], param_xaxis[param_index], 3, 1)
+    d_dCa_ratio[param_index].line(graph_result[graph_index], param_xaxis[param_index], 2, 1)
+    sprint(tmpstr,"Inhibition in the %s, dCa_ratio's vs %s. (black spine0, green spine1, blue spine2, red dend)", protocol_str, param_str)
+  } else {
+    // inhib in spine so spine1 is red
+    s1_dCa_ratio[param_index].line(graph_result[graph_index], param_xaxis[param_index], 2, 1)
+    d_dCa_ratio[param_index].line(graph_result[graph_index], param_xaxis[param_index], 3, 1)
+    sprint(tmpstr,"Inhibition in the %s, dCa_ratio's vs %s. (black spine0, red spine1, blue spine2, green dend)", protocol_str, param_str)
+  }
+  s2_dCa_ratio[param_index].line(graph_result[graph_index], param_xaxis[param_index], 4, 1)
+  graph_result[graph_index].label(.05,.95,tmpstr)
+  graph_result[graph_index].exec_menu("View = plot")
+  graph_index += 1
+}
+
+proc run_inhib_spine_or_dendrite() {
+  if (spine_or_dendrite) {
+    multi_dend_run()
+  } else {
+    multi_spine_run()
+  }
+  // record results in vectors
+  s0_dCa_ratio[param_index].x[value_index]=spine0_dCa_ratio
+  s1_dCa_ratio[param_index].x[value_index]=spine1_dCa_ratio
+  s2_dCa_ratio[param_index].x[value_index]=spine2_dCa_ratio
+  d_dCa_ratio[param_index].x[value_index]=dend_dCa_ratio
+}
+
+dendritic_inhibition_factor=10 // it is known that dCa_ratios are not
+                               // much effected at small dendritic
+                               // inhibition so try large inhibition
+
+for spine_or_dendrite=0,1 { // iterate over inhibition in the spine or dendrite
+  protocol_str = "spine"
+  if (spine_or_dendrite) protocol_str="dend"
+
+  // cm is parameter 0
+  param_index = 0
+  print "cm"
+  param_str="cm"
+  a1 = 0.24
+  a2 = 1.15
+  for value_index=0, Num_of_values-1 { 
+    print value_index, exp_axis(a1, a2, value_index/(Num_of_values-1)) 
+    cm_ = exp_axis(a1, a2, value_index/(Num_of_values-1))
+    forall cm = cm_  // this and next line specialized for this loop
+    param_xaxis[param_index].x[value_index]=(cm_)
+    run_inhib_spine_or_dendrite()
+  }
+  output_results()
+ 
+ // set capacitance back
+  forall cm=0.75
+  
+  // parameter 1
+  param_index = 1
+  print "Ra"
+  param_str="Ra"
+  a1 = 100
+  a2 = 300
+  for value_index=0, Num_of_values-1 { 
+    print value_index, exp_axis(a1, a2, value_index/(Num_of_values-1))
+    Ra_ = exp_axis(a1, a2, value_index/(Num_of_values-1))
+    forall Ra = Ra_ // this and next line specialized for this loop
+    param_xaxis[param_index].x[value_index]=(Ra_)
+    run_inhib_spine_or_dendrite()
+  }
+  output_results()
+  // set the Ra back
+  forall Ra = 200
+  
+  param_index = 2
+  print "g_pas"
+  param_str="g_pas"
+  a1 = 1e-9
+  a2 = 0.000475
+  for value_index=0, Num_of_values-1 { 
+    print value_index, exp_axis(a1, a2, value_index/(Num_of_values-1))
+    g_pas_ = exp_axis(a1, a2, value_index/(Num_of_values-1))
+    forall g_pas = g_pas_ // this and next line specialized for this loop
+    param_xaxis[param_index].x[value_index]=(g_pas_)
+    run_inhib_spine_or_dendrite()
+  }
+  output_results()
+  forall g_pas = 2.5e-5 // set g_pas back to default
+  
+  param_index = 3
+  print "ddiam"
+  param_str="ddiam"
+  a1 = 1.5
+  a2 = 3
+  for value_index=0, Num_of_values-1 { 
+    print value_index, exp_axis(a1, a2, value_index/(Num_of_values-1))
+    ddiam = exp_axis(a1, a2, value_index/(Num_of_values-1))
+    dendrite for(x,0) diam(x) = ddiam // this and next line specialized for this loop
+    param_xaxis[param_index].x[value_index]=(ddiam)
+    run_inhib_spine_or_dendrite()
+  }
+  output_results()
+  dendrite for(x,0) { diam(x) = 2 } // set diam back to default
+  
+  param_index = 4
+  print "sdiam"
+  param_str="sdiam"
+  a1 = .02
+  a2 = 0.2
+  for value_index=0, Num_of_values-1 {
+    print value_index, exp_axis(a1, a2, value_index/(Num_of_values-1))
+    spine1_neck_diam = exp_axis(a1, a2, value_index/(Num_of_values-1))
+    Spine[1].neck.diam = spine1_neck_diam // this and next line specialized for this loop
+    param_xaxis[param_index].x[value_index]=(spine1_neck_diam)
+    run_inhib_spine_or_dendrite()
+  }
+  output_results()
+  spine1_neck_diam = 0.07
+  Spine[1].neck.diam = 0.07 // set diam back to default
+}

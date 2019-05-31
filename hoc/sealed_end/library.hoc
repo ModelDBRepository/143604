@@ -1,0 +1,113 @@
+// library.hoc
+// contains declarations and functions used for the sealed_end studies
+//
+// these studies either move the spines to various positions along the dendrite or
+// they pinch the dendrite off at various lengths - all to study the effect of
+// what occurs when inhbition in spines occurs near the distal tip of a dendritic branch.
+
+// the 3 spines remain seperated by 10 microns to their nearest neighbor(s)
+spines_start = 100 // these numbers are for the distal spine's distance to the soma
+spines_location=spines_start
+spines_end = 600
+spines_increment = 5 // 50 // the number of microns between each move of the spines (not between the spines)
+spines_number = (spines_end-spines_start)/spines_increment + 1
+
+
+objref max_bAP_ctrl[spines_number] // max bAP envelope control case (no inhibition)
+objref max_bAP_inhib[spines_number] // max bAP envelope (with inhibition in the middle spine)
+objref distance_vec // goes with above vectors as distance of each compartment in the dendrite from 0 end of soma
+for i=0, spines_number-1 {
+  max_bAP_ctrl[i]=new Vector()
+  max_bAP_inhib[i]=new Vector()
+}
+
+objref save1, save2
+save1 = new Vector()
+save2 = new Vector() // used to truncate max_bAP_ctrl,_inhib to before the pinch in the dendrite
+
+soma {distance()} // measure distance from the 0 end of soma
+
+distance_vec = new Vector()  // doesn't change so calculated once here:
+dendrite for (x,0) {
+  distance_vec.append(distance(x))
+}
+objref dendrite_length_vec // contains all the dendrite endpoint lengths for each simulation
+dendrite_length_vec = new Vector()
+dendrite_length_vec.indgen(spines_start, spines_end, spines_increment)
+
+forall insert ds
+
+objref dCa_inhib_vec, dCa_ctrl_vec, dCa_ratio_vec // holds middle
+                                                  // spine's (peak Ca
+                                                  // concentration -
+                                                  // Baseline) for
+                                                  // each simulation
+                                                  // and their ratio
+                                                  // for each
+                                                  // (spineloc) length
+                                                  // dendrite.
+dCa_inhib_vec = new Vector()
+dCa_ctrl_vec  = new Vector()
+dCa_ratio_vec = new Vector()
+
+objref head0_ca_peak, head1_ca_peak
+objref head0_v_peak, head1_v_peak, head2_v_peak, t_vec
+
+head0_ca_peak=new Vector()
+head1_ca_peak=new Vector()
+head0_v_peak=new Vector()
+head1_v_peak=new Vector()
+head2_v_peak=new Vector()
+
+
+// t_vec setup:
+tstop=500 // 150 // plenty of time to capture the peak voltages
+t_vec = new Vector(tstop/dt+1)
+t_vec.indgen(0, tstop, dt)
+
+load_file("../init_figs.hoc")
+proc setup_recording_vecs() {
+
+  head0_cai_vec = new Vector()
+  head1_cai_vec = new Vector()
+  head2_cai_vec = new Vector()
+  head0_cai_vec.label("Spine[0].head.cai(0.5)")
+  head1_cai_vec.label("Spine[1].head.cai(0.5)")
+  head2_cai_vec.label("Spine[2].head.cai(0.5)")
+
+  head0_cai_vec.record(&Spine[0].head.cai(0.5), t_vec)
+  head1_cai_vec.record(&Spine[1].head.cai(0.5), t_vec)
+  head2_cai_vec.record(&Spine[2].head.cai(0.5), t_vec)
+
+}
+
+// the spines are moved by an amount delta
+delta=10 // 10 microns for example
+
+proc move_spines_by_delta() {
+
+  // spine_location_vec is updated by this amount
+  spine_location_vec.add(delta)
+
+  // then the spines are moved
+  for i=0, spine_location_vec.size()-1 {
+    dendrite connect Spine[i].neck(0), spine_location_vec.x[i]/dendrite.L
+  }
+}
+
+proc move_spines_to_location() {
+  distal_destination=$1
+  // spine_location_vec is updated by this amount
+  // by using it as the last element of spine_location_vec.
+  // All elements are shifted so that this is true
+  // it is assumed that the last element of spine_location_vec
+  // is also the most distal one
+  current_distal_spine_location=spine_location_vec.x[spine_location_vec.size()-1]
+  delta_ = distal_destination-current_distal_spine_location
+  spine_location_vec.add(delta_)
+
+  // then the spines are moved to the updated spine_location_vec
+  for i=0, spine_location_vec.size()-1 {
+    dendrite connect Spine[i].neck(0), spine_location_vec.x[i]/dendrite.L
+  }
+}

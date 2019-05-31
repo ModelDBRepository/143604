@@ -1,0 +1,21 @@
+// Multi_cond_declare_vecs.hoc
+// declares vectors and strdefs for recording simulations
+// in MultiConditions.hoc and demo_choice.hoc
+
+strdef proto_dir
+strdef filename
+
+objref dend_v_vec, spine0_v_vec, spine1_v_vec, spine2_v_vec
+objref dend_gabaa_g_vec, spine0_gabaa_g_vec, spine1_gabaa_g_vec, spine2_gabaa_g_vec
+objref dend_cai_vec, spine0_cai_vec, spine1_cai_vec, spine2_cai_vec
+//tstop= 1 // test condition
+// below are graphs (the multi conditions turned into 7 with the addition
+// of protocol bAP + 1x inhibition in dendrite,  1x inhibition in dendrite
+// (without bAP)
+num_of_conditions = 8
+objref  multicond_v[num_of_conditions], multicond_ca[num_of_conditions], multicond_gates[num_of_conditions]
+objref multicond_gabaa_g[num_of_conditions]
+// add the activation and inactivation curves for the ca chan in spines and dend
+objref m_ca_dend_vec, h_ca_dend_vec, m_ca_spine1_vec, h_ca_spine1_vec
+objref  m_ca_spine0_vec, h_ca_spine0_vec
+

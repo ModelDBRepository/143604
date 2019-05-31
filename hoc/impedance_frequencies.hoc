@@ -1,0 +1,49 @@
+// impedance_frequencies.hoc
+// runs several cases to determine impedances of the model
+// with just spine inhibition.
+// impedance/spineinhib/ will have subfolders
+// ./0/ ./25/ ./100/ ./1000/
+//
+// in each folder store impedance (at frequency of parent folder) as a function of time for 3
+// spine heads and 1 dendrite compartment adjacent to the middle
+// (inhibited) spine when there is bAP and inhibition in a spine head
+// or each seperately
+// These traces have the names
+// spine0_z.txt, spine1_z.txt, spine2_z.txt, dendrite_z.txt
+//
+// if convenient for Mike transfer the names to protocol_abovefilenames
+// where protocol is bAP, spineinhib, bAPspineinhib.
+
+print "Running from hoc/impedance_frequencies.hoc - results will be in ./impedance/*/*"
+objref filename
+strdef protocol
+ 
+proc write_zvecs() { // $s1 is protocol (something like impedance/bAP)
+  sprint(tmpstr,"%s/dendrite_z.dat" , $s1)
+  write_vec(tmpstr,tvec, zvec[0])
+
+  for i=1, num_of_zvecs-1 {
+    sprint(tmpstr,"%s/spine%d_z.dat", $s1, i-1)
+    write_vec(tmpstr,tvec, zvec[i])
+  }
+}
+
+objref impedance_frequencies_vec
+impedance_frequencies_vec = new Vector()
+impedance_frequencies_vec.append(0, 25, 100, 1000)
+
+for freq_index = 0, impedance_frequencies_vec.size()-1 {
+  frequency = impedance_frequencies_vec.x[ freq_index ]
+  // run with no bAP and a spine inhibition //////////////
+
+  MultIClamp[0].number = 0 // no bAP
+
+  isyn_ = 2 // middle spine
+  NC[isyn_].weight = 0.0004 // ordinary inhibitory synapse in the spine
+
+  zrun(frequency,delta_t, seclist)
+
+  sprint(protocol,"impedance/spineinhib/%d", frequency)
+  write_zvecs(protocol)
+  graphz()
+}

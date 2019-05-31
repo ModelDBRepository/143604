@@ -1,0 +1,216 @@
+
+// load the standard nrn libraries
+
+{load_file("nrngui.hoc")}
+// use this for interactive sessions {load_file("hoc/variable_time_step.ses")}
+//{load_file("hoc/variable_dt_off.ses")}
+// define the dendrite shape
+{load_file("hoc/dendrite_morphology.hoc")}  // inserts pas into dendrite
+// load the Spine class and place spines on dendrite
+// the below lists make altering the spine's properties
+// convenient with commands like
+// forsec spine_list { do something to all the spines }
+// or
+// forsec spinehead_list { do something to all the spine heads }
+
+objref spine_list, spinehead_list
+spine_list = new SectionList()
+spinehead_list=new SectionList()
+
+{load_file("hoc/spine_template.hoc")}  // inserts pas into spine
+
+{load_file("hoc/spine_placement.hoc")} // and spine geometry
+
+// create a "rig" to record and stimulate dendrite/spines
+{load_file("hoc/runcntrl_graphs_iclamp.ses")}
+
+//insert currents and receptors
+{load_file("hoc/insert_synapses.hoc")} // trapezoid pulse and/or Exp2Syn synapses
+
+// {load_file("hoc/v_soma_spine_dend.ses")}
+
+{load_file("hoc/run_over_Rm.hoc")} // contains run_over_Rm() procedure
+
+// for ease of computations use fixed time step 0.025 ms 
+objref t_vec
+tstop= 500 // for debugging, normally 500
+// print "tstop=",tstop,", dt=",dt
+// t_vec=new Vector()
+// t_vec.indgen(0, tstop, dt) // start, stop, step
+// print "t_vec.size()=",t_vec.size()
+
+// the below values that are human friendly corresponds to:
+// at 0.5 ms the conductance ramp starts
+// at 0.833 the max conductance is reached
+// at 1.1666 the conductance starts falling
+// at 1.5 ms the conductance begins to remain zero
+
+start_of_ramp = 0.5
+delta_of_ramp = 0.33333 // ramp is both up and down from the max plateau
+delta_of_plateau = 0.33333
+g_max_param = 0.0004 // = 0.4 nS maximum conductance reached on the plateau
+
+{load_file("hoc/convenient_tasks.hoc")}
+load_file("hoc/add_soma.hoc")  // inserts pas into soma
+small_soma() // start out with a small soma size from BC126 // micro_soma()
+
+{load_file("hoc/specific_cases.hoc")}  // sets to parameters used in 20120315 meeting
+
+// uncomment below for impedance studies - 20120404: below needs a ZoidSyn to replace removed zoid vec
+// load_file("hoc/run_impedance_study.hoc")
+{load_file("hoc/MultIClamp.ses")}
+objref zoid_index_vec
+zoid_index_vec = new Vector()
+zoid_index_vec.append(1,2,3,4) // prep the spine heads to study inhib
+// note that more zoid indicies could be added to the above to prepare to study
+// inhibition with a long pulse set below.  The only variable that needs to
+// be changed to make the pulse active is number: change number from 0 to 1
+// to make pulse exist
+zoid_index=4 // used to be 1211 // typical value
+for i=0, zoid_index_vec.size()-1 {
+  zoid_index=zoid_index_vec.x[i]
+  ZoidSyn[zoid_index].trf=1
+  ZoidSyn[zoid_index].tp=1000
+  ZoidSyn[zoid_index].start=100
+  ZoidSyn[zoid_index].interval=1003
+  ZoidSyn[zoid_index].number=0
+  // ZoidSyn[zoid_index].e=
+  ZoidSyn[zoid_index].gmax=.4
+}
+strdef tmpstr
+{sprint(tmpstr,"For zoid_index=%d",zoid_index)}
+objref vbox
+{
+vbox = new VBox()
+vbox.intercept(1)
+xpanel("Set Spine neck diam's, Ra's")
+  xlabel("Lower resistance settings:")
+  xbutton("Spine neck diam's to 0.1 um","forsec \"neck\" {diam=0.1}")
+  xbutton("Spine neck Ra's to 100","forsec \"neck\" {Ra=100}")
+  xlabel("Higher resistance settings:")
+  xbutton("Spine neck diam's to 0.07 um","forsec \"neck\" {diam=0.07}")
+  xbutton("Spine neck Ra's to 200","forsec \"neck\" {Ra=200}")
+  xlabel("Confirm:")
+  xbutton("Print spine neck Ra, diam on oc> prompt","forsec \"neck\" {print secname(),\": Ra=\",Ra,\", diam=\",diam}")
+xpanel()
+
+xpanel("soma geometry")
+  // xbutton("add a soma","load_file(\"hoc/add_soma.hoc\")")
+  xbutton("small soma","{small_soma()}")
+  xbutton("big soma","{big_soma()}")
+  xbutton("micro soma","{micro_soma()}")
+  //xbutton("print soma L, diam","{print \"soma L=\",soma.L,\", \", diam=\",soma.diam}")
+  xvalue("soma.L")
+  xvalue("soma.diam")
+xpanel()
+xpanel("dendrite diam and gmaxes")
+  xvalue("dendrite.diam")
+  xvalue("dendrite.gbar_na")
+  xvalue("dendrite.gbar_kv")
+  xvalue("dendrite.e_pas")
+  xlabel("d is dendrite and spine SectionList: use button below to set further below:")
+  xbutton("forsec d {factor=below gbar_na=factor*80 gbar_kv=factor*20 gbar_ca=diam2_dendrite_gbar_ca}","adjust_excitability(-1)") // prior 20120708
+  xbutton("forsec d {factor=below gbar_na=factor*80 gbar_kv=factor*150 gbar_ca=diamp7_dendrite_gbar_ca}","adjust_excitability(0)")
+  factor=0.5
+  // adjust the Ca current to reach 1 uM in Spine heads
+  //diam2_dendrite_gbar_ca *= (0.001/0.000128848) // this factor 8 does it
+  diam2_dendrite_gbar_ca =0.032326 // some paper figures made with   0.029843 fall just shy of 1uM
+  // Ca peaks
+  diamp7_dendrite_gbar_ca = 0.04202328
+  xvalue("factor")
+  xvalue("diam2_dendrite_gbar_ca")
+  xvalue("diamp7_dendrite_gbar_ca")
+  xlabel("Note: factor=.2 makes decrementing dendritic bAP for 2um diam")
+//forsec d {factor=0.05 gbar_na=factor*1000 gbar_ca=3.5 gbar_kv=factor*500}")
+xpanel()
+
+load_file("hoc/GABA_A_ReceptorDistribution.hoc")
+vbox.intercept(0)
+vbox.map("Morphology and Spine neck resistivity")
+}
+
+load_file("hoc/v_dend_spine.ses")
+
+load_file("hoc/hyperpol.hoc") // sets values for gbar_na, gbar_kx in dendrite and
+// includes hyperpolarizing rig control gui
+
+
+// load_file("custominit.hoc")
+
+objref d
+d = new SectionList() // contains dendrite and Spine's
+dendrite d.append()
+forsec "Spine" d.append() // gets heads and necks
+
+// for decrementing bAP: forsec d {factor=.2 gbar_na=factor*80 gbar_kv=factor*20 gbar_ca=1e-3}
+
+proc adjust_excitability() {
+forall e_pas=-61.5 // makes Vrest about -60, e_pas formerly -70 prior to 20121023
+if ($1) { // for dendrite diams=2
+   dendrite diam=2
+   // forsec d { gbar_na=factor*80 gbar_kv=factor*20 gbar_ca=diam2_dendrite_gbar_ca}  // prior 20121023
+   forsec d { gbar_na=factor*80 gbar_kv=factor*24 gbar_ca=diam2_dendrite_gbar_ca}  // increase k
+} else {  // for dendrite diams=.7
+   dendrite diam=0.7
+   forsec d { gbar_na=factor*80 gbar_kv=factor*150 gbar_ca=diamp7_dendrite_gbar_ca} // gbar_kv increased for small diam dendrites
+}
+}
+
+adjust_excitability(-1) // set to true to set diam 2 parameters rather than 0.7 (p7) as default
+// readjust_dend_diam(2,.7) // taper the dendrite
+
+proc make_spines_active() {
+  // apply the middle dendrite conductance values to the spine
+  forsec "Spine" {gbar_na=dendrite.gbar_na(0.5) gbar_kv=dendrite.gbar_kv(0.5)}
+}
+// note that tstop is set in the below (to 500 or 150 for expedience)
+{load_file("hoc/sealed_end/library.hoc")}
+
+// load_file("custominit.hoc")
+// forall insert cat1g
+load_file("hoc/zrun.hoc") // prepare to create impedance plots
+dend_inhib_factor=10
+xpanel("generate figures")
+ xbutton("Multiple conditions (default conductance-based inhib syn)", "xopen(\"MultiConditions.hoc\")")
+ xlabel("Multiple conditions: inhibspine, inhibdend, bAP, bAPinhibspine, bAPinhibdend, bAP1xinhibdend, 1xinhibdend, spineinhibEClm40")
+ xbutton("Multiple conditions with current-based inhib", "xopen(\"MultiConditionsCur.hoc\")")
+ xlabel("Multiple conditions: inhibspine, inhibdend, bAP, bAPinhibspine, bAPinhibdend, bAP1xinhibdend, 1xinhibdend, spineinhibEClm40")
+ xlabel("Below studies of \"sealed end\" effect of spine inhibition (parameters in hoc/sealed_end/library.hoc):")
+ xbutton("Incrementaly change dend length from beyond spines, 100, to 600 um","load_file(\"hoc/sealed_end/pinch_migrator.hoc\")")
+ xlabel("Compare spine inhibition to control as \"length\" of dendrite increases away from fixed spine position")
+ xbutton("Incrementally move spines from 100 to 600 um","load_file(\"hoc/sealed_end/spine_migrator.hoc\")")
+ xbutton("... move spines from 100 to 600 um while bAP decays","load_file(\"hoc/sealed_end/spine_migrator_bAPdecays.hoc\")")
+ xbutton("... move spines from 100 to 600 um while bAP decays in a passive dend","load_file(\"hoc/sealed_end/spine_migrator_pas_dend_bAPdecays.hoc\")")
+ xlabel("Compare spine inhibition to control as spines are shuffled off to the dendrite end")
+ xlabel("Note: the above to buttons save their results in sealed_end folder in")
+ xlabel("subfolders pinch_moves and spines_move.  Use matlab programs there to graph results")
+ xbutton("Conductance run","zrun(frequency,delta_t, seclist)")
+ xvalue("frequency")
+ xvalue("delta_t")
+ xbutton("refresh graph","graphz()")
+ xbutton("Multiple impedance conditions","xopen(\"hoc/impedance_conditions.hoc\")")
+ xbutton("Impedance w/ spine inhib. at freqs (0, 25, 100, 1000)","xopen(\"hoc/impedance_frequencies.hoc\")")
+ xbutton("bAP height influence on dend inhibition","xopen(\"hoc/dend_shaft_bAP_inhib.hoc\")")
+ xvalue("dend_inhib_factor")
+ xlabel("multiplies the 0.4 nS inhib synapse weight in the dend during bAP height influence on dend inhib")
+ xbutton("find 10% 25% dCa ratio parameter ranges", "{load_file(\"hoc/systematic_exploration.hoc\") load_file(\"hoc/mulRunFitRatio.ses\")}")
+ percent=10
+ xvalue("percent")
+ xbutton("Shift Ca chan. act. and/or inact. and E_Cl","load_file(\"initg.hoc\"")
+xpanel()
+
+xpanel("Active/Passive Spines")
+  xbutton("Make Spines passive","forsec \"Spine\" {gbar_na=0 gbar_kv=0}")
+  xbutton("Make Spines active", "make_spines_active()")
+  xbutton("Print Na, K gbar on oc> prompt","forsec \"Spine\" {print secname(),\" gbar_na = \",gbar_na,\", gbar_kv = \", gbar_kv}")
+xpanel()
+// make spines passive by default
+forsec "Spine" {gbar_na=0 gbar_kv=0}
+
+// switch to Rm from (Mainen et al. 1995)
+// used to be 30000.
+forall g_pas = 1/40000
+
+load_file("hoc/init_figs.hoc")  // objref's, proc's, and variables for figs
+
+load_file("hoc/demo_choice.hoc")

@@ -1,0 +1,73 @@
+// dend_shaft_bAP_inhib.hoc
+// study inhibition in the dendrite as a function of bAP height
+// by reducing the Na and K channels so that the bAP height declines
+// in successive pairs (of ctrl and 1xinhib in the dend) simulations.
+// This study was an attempt to see if the idea that dendritic shaft
+// inhibition as observed experimentally might appear in the model
+// if the height of the bAP was reduced at those places (compartments)
+// in the dendrite where the inhibition is being observed.
+
+// run first with spines near 100 um from soma, then run again further
+// out if bAPs are not fully extinguished by passive spread
+
+// use powers of two: 1, 1/2, 1/4, 1/8, 1/16 Na K conductance densities (gs)
+// Let these be part of the folder names
+// NaKgs/1/1/ NaKgs/1/2/ NaKgs/1/4/ NaKgs/1/8/ NaKgs/1/16/
+// each of which has subfolders, e.g.
+// NaKgs/1/16/ctrl/ NaKgs/1/16/dend1xinhib/
+// the last subfolder of which is called ctrl_or_inhib below
+
+// In each NaKgs/numerator/denominator/ctrl_or_inhib store:
+// bAP_peak_profile.txt, spine0_cai_vec.txt, spine1_cai_vec.txt,
+// spine2_cai_vec.txt, dend_cai_vec.txt spine0_v_vec.txt,
+// spine1_v_vec.txt, spine2_v_vec.txt, dend_v_vec.txt
+//
+// and then in the top level NaK_gs/ store
+// statistics_table.txt which contains a copy of the below printed
+// table (on oc> prompt as simulation runs) that looks like this
+//
+// Na K g's: 1/(denominator)
+// compartment V_peak_ctrl V_peak_inhib Ca_peak Ca_baseline dCa_ctrl dCa_inhib dCa_ratio
+// spine0 (A B C D E F)
+// spine1 (A B C D E F)
+// spine2 (A B C D E F)
+// dend (A B C D E F)
+//
+// Where items in parenthesis represent printed numbers.
+// Note param3.hoc had nearly the dCa methods I want to use.
+// however they were too oriented towards param3.hoc - so take them to
+// create a new file hoc/dend_shaft_bAP_functions.hoc that has the
+// modified declaration and functions from param3.hoc for use here.
+//
+// I need to find out if I can find and store the max cai in each
+// compartment similarly to how vmax_ds efficiently finds the max
+// voltage in each compartment otherwise I have to do it in hoc (slower).
+
+load_file("hoc/dend_shaft_bAP_functions.hoc")
+
+// store original conductances in vectors
+objref gbar_na_vec, gbar_kv_vec
+gbar_na_vec = new Vector()
+gbar_kv_vec = new Vector()
+
+// Actually only change the dendrites Na K max conductances.  Store default:
+dendrite {
+  gbar_na_vec.append(gbar_na)
+  gbar_kv_vec.append(gbar_kv)
+}
+
+for i=0,4 { // loop over the powers of two from 2^0 = 1 to 2^4 = 16
+  denominator = 2^i
+  // set the Na K densities to orig or successive power of two fractions
+  vec_index=0
+  dendrite {
+    gbar_na = gbar_na_vec.c.div(denominator).x[vec_index]
+    gbar_kv = gbar_kv_vec.c.div(denominator).x[vec_index]
+    vec_index += 1
+  }
+
+  // for each calculate the control (no inhibition) and dendrite inhibited
+
+  bAP_without_with_dendinhib()
+
+}

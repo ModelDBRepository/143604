@@ -1,0 +1,165 @@
+// MainenCurrentDistribution.hoc
+// distributes currents throughout the dendrite as done in Mainen Sejnowski 1996
+// and/or Mainen et al. 1995
+// adopted from ModelDB accession number 
+// patdemo/demofig1.hoc
+
+/* --------------------------------------------------------------
+   Multi-compartment simulations of neocortical neurons
+   DEMO
+  
+   Z. F. Mainen and T. J. Sejnowski (1996) Influence of dendritic
+   structure on firing pattern in model neocortical neurons. 
+   Nature 382: 363-366. 
+... 
+   -------------------------------------------------------------- */
+
+objref sh, st, dendritic
+
+// create soma
+// access soma
+
+//tstop = 1000
+//steps_per_ms = 40
+//dt = 0.025
+
+
+// --------------------------------------------------------------
+// passive & active membrane 
+// --------------------------------------------------------------
+
+ra        = 200 // 200 from Mainen et al. 1995 // 150 from Mainen Sej. 1996
+global_ra = ra
+rm        = 30000
+c_m       = 0.75
+cm_myelin = 0.04
+g_pas_node = 0.02
+
+v_init    = -70
+celsius   = 37
+
+Ek = -90
+Ena = 60
+
+gna_dend = 20
+gna_node = 30000
+gna_soma = gna_dend
+
+gkv_axon = 2000
+gkv_soma = 200
+
+gca = .3
+gkm = .1
+gkca = 3
+
+gca_soma = gca
+gkm_soma = gkm
+gkca_soma = gkca
+ 
+
+proc init_cell() {
+
+  // passive
+  forall {
+    insert pas
+    Ra = ra 
+    cm = c_m 
+    g_pas = 1/rm
+    e_pas = v_init
+  }
+
+  // na+ channels
+  forall insert na
+  forsec dendritic gbar_na = gna_dend
+/* not in spiny dendrite
+  forsec "myelin" gbar_na = gna_dend
+  hill.gbar_na = gna_node
+  iseg.gbar_na = gna_node
+  forsec "node" gbar_na = gna_node
+  // kv delayed rectifier channels
+  iseg { insert kv  gbar_kv = gkv_axon }
+  hill { insert kv  gbar_kv = gkv_axon }
+*/
+  soma { insert kv  gbar_kv = gkv_soma }
+
+  // dendritic channels
+  forsec dendritic {
+    insert km    gbar_km  = gkm
+    insert kca   gbar_kca = gkca
+    insert ca    gbar_ca = gca
+    insert cad
+  }
+
+  soma {
+    insert km    gbar_km  = gkm
+    insert kca   gbar_kca = gkca
+    insert ca    gbar_ca = gca
+    insert cad
+    gbar_na = gna_soma
+    gbar_km = gkm_soma
+    gbar_kca = gkca_soma
+    gbar_ca = gca_soma
+  }
+
+ 
+  forall if(ismembrane("k_ion")) ek = Ek
+  forall if(ismembrane("na_ion")) {
+    ena = Ena
+    // seems to be necessary for 3d cells to shift Na kinetics -5 mV
+    vshift_na = -5
+  }
+  forall if(ismembrane("ca_ion")) {
+    eca = 140
+    ion_style("ca_ion",0,1,0,0,0)
+    vshift_ca = 0
+  }
+}
+
+proc load_dendrite() {
+
+// used to be $s1 filename however no arguments in spiny_dendrite
+
+// no longer any need to:  forall delete_section()
+// because spiny_dendrite not reloading these
+
+  dendritic = new SectionList()
+
+  dendrite {
+    dendritic.append()
+  }    
+  access soma
+  // show spiny dendrite
+/*
+  sh = new PlotShape()
+  sh.size(-300,300,-300,300)
+*/
+  // but control position of PlotShape window -- Ted Carnevale
+  sh = new PlotShape(0)
+  sh.size(-300,300,-299.522,299.522)
+  sh.variable("v")
+  {sh.view(-300, -299.522, 600, 599.043, 265, 369, 200.64, 200.32)}
+
+  init_cell()
+
+  st=new IClamp(.5)
+  st.dur = 900
+  st.del = 5
+}
+
+// removed Mainen menu of models and
+// replaced load_3dcell with load_dendrite
+
+load_dendrite()  
+st.amp = 0.0 // turn off Mainen clamp unless decide to use later
+
+// graph of v(0.5) vs. t
+
+objref g
+
+{
+g = new Graph(0)
+g.size(0,1000,-80,40)
+{g.view(0, -80, 1000, 120, 265, 105, 300.48, 200.32)}
+graphList[0].append(g)
+g.addexpr("v(.5)", 1, 1, 0.8, 0.9, 2)
+}

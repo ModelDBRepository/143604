@@ -1,0 +1,63 @@
+Miscellaneous model details:
+
+1) The two starting cases can be controlled by pushing one of two
+buttons in the "Morphology and Spine neck resistivity" control panel
+about a third of the way up from the bottom:
+
+a) dendrite diam=2 (look for the diam2_dendrite_gbar_ca)
+
+This is the original dendrite length and ion channels max conductance
+configuration for the paper.  The Na and K excitability (maximum
+conductances) were raised to a level comfortably above where reliably
+propagated bAPs occur (When the conductace is lowered by multiplying
+by 0.4 the bAPs decrement as they propagate.  Starting from a
+multiplying "factor=0.5" in an init.hoc morpohology control panel,
+lowering to "factor=0.2" accomplishes this .4 drop ).  The calcium
+maximum conductances were set to where a single bAP accumulated a peak
+of 1 uM Ca (suggested by Higley) in an uninhibited spine head.  The
+calcium currents do not significantly effect the voltage trajectory so
+this setting is arbitrary in regards to the voltage trace.
+
+b) dendrite diam=.7 (look for the diamp7_dendrite_gbar_ca)
+
+The same statements under a) above apply except that the K density
+(K_DR mechanism "kv") was boosted to counteract additional excitability of
+smaller sized membrane which fires a chain of APs in the chloride
+reversal potential = -40 mV numerical experiment.  (The real
+experiments do not have a train of APs in this case).
+
+---
+
+On the length of the dendrite choice:
+
+We use the dendrite L=600 micron version to avoid bAP peaks growing
+per distance from the soma (confounding the studies of inhibition) as
+occur in the L=200 case.  In L=200 the bAP peaks grow as they
+propagate through the distances that the spines are placed, close to
+the end of the cylinder.  We assume in the real neurons decreasing
+sodium channels or increasing K channels likely maintain constant
+height of bAPs as they propagate since experimentally the peak Ca
+signals in spines are distance independent (Figure S3c).  We could
+have used maximum conductances that varied as a function of distance
+in the model instead of the longer dendrite.
+
+---
+
+The supplemental graph panels show changes in the activation of ca
+(vertical) and changes in the reversal potential of gabaa (horizontal)
+effects on inhibition of Ca signals in spines.
+
+-------
+
+To calculate the 5 conditions for active and passive spines:
+1) click the multiconditions button
+2) copy the multiconditions folder
+cp -r multiconditions multiconditions_pas_spine
+3) click the make spines active button
+4) click the multiconditions button
+5) copy the multiconditions folder
+cp -r multiconditions multiconditions_act_spine
+6) run matlab program matlab/dCa_ratio.m
+
+-------
+

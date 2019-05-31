@@ -1,0 +1,650 @@
+// param3.hoc
+/*
+Contains the functions for param3.hoc which calculated these
+simulations for changes in the 3 parameters mshift (in ca current),
+ECl, gbar_ca
+
+3. My calculation protocol details and
+possible additions: For the following please send three traces
+
+I) spine control Ca trace (protocol bAP)
+II) spine Ca with inhib (bAPspineinhib)
+III) neighboring spine Ca (bAPspineinhib)
+II and II are acquired on same simulation run
+
+IV) calculate also dCa, well actually
+dCa(inhibited)/dCa(control) = ([Ca2+]peak,inh - B)/([Ca2+]peak,ctrl - B)
+calculated from I), II):
+dCa_ratio.txt
+V) record also the dCa(inhibited), dCa(control) values separately
+dCa_inhib.txt
+dCa_ctrl.txt
+
+a) mshift -15 mV, 0, 15 mV (code as m15, zero, 15)
+b) ECl=-90, -70, -40 mV (code as m90, m70, m40)
+c) gbar_ca 0.5x, 1x, 2x (code as 0p5x, 1x, 2x)
+
+These protocols results spine0.dat, spine1.dat,  will fall under a
+folder called param3 (parameter studies under Summary email's point
+number 3 (the points 1 and 2 were calculated under the 5conditions
+folder)):
+
+param3/mshift_m15/[bAP, bAPspineinhib]
+param3/mshift_zero/[bAP, bAPspineinhib]
+param3/mshift_15/[bAP, bAPspineinhib]
+param3/ECl_m90/[bAP, bAPspineinhib]
+param3/ECl_m70/[bAP, bAPspineinhib]
+param3/ECl_m40/[bAP, bAPspineinhib]
+param3/gbar_ca0p5x/[bAP, bAPspineinhib]
+param3/gbar_ca1x/[bAP, bAPspineinhib]
+param3/gbar_ca2x/[bAP, bAPspineinhib]
+The above 9 folders have two protocols each for a total of 18 protocols
+in addition each folder
+param3/X/
+has files
+dCa_ratio.txt (uses results in bAP, bAPspineinhib sub folders)
+dCa_inhib.txt (ratio numerator, uses result from bAPspineinhib/spine1.txt)
+dCa_ctrl.txt (ratio denominator, uses result from bAP/spine1.txt)
+
+-----------
+Additional work - translate matlab dCa_ratio.m to dCa_ratio.hoc, which
+does the same thing in hoc.
+-----------
+
+The calcium and voltage trace files are stored in "proto_dir/file" 
+where protocol directory proto_dir can be upto
+
+inhibspine, inhibdend, inhibdend, bAP, bAPinhibspine, bAPinhibdend,
+bAP1xinhibdend
+
+and files can be as many as spine0_ca, spine1_ca, spine2_ca, dend_ca, spine0_v,
+spine1_v, spine2, dend_v
+
+however here unlike in FiveConditions.hoc, the protocols and files are limited to
+X/bAP X/bAPspineinhib
+and spine1_ca, spine0_ca where spine1 is the middle spine head, and spine0 is the
+proximal spine head (receives a smaller bAP typically because of the slight increase
+in bAP amplitude as a function of distance along the dendrite.
+*/
+strdef param_dir
+strdef proto_dir
+strdef filename
+objref f // temporary file object
+f = new File()
+
+objref dend_v_vec, spine0_v_vec, spine1_v_vec, spine2_v_vec
+objref dend_cai_vec, spine0_cai_vec, spine1_cai_vec, spine2_cai_vec
+// tstop= 1 // test condition
+// below are graphs (the 5 conditions turned into 6 with the addition
+// of protocol bAP + 1x inhibition in dendrite
+num_of_conditions = 18
+objref  param3_v[num_of_conditions], param3_ca[num_of_conditions], param3_gates[num_of_conditions]
+
+// add the activation and inactivation curves for the ca chan in spines and dend
+objref m_ca_dend_vec, h_ca_dend_vec, m_ca_spine1_vec, h_ca_spine1_vec
+objref  m_ca_spine0_vec, h_ca_spine0_vec
+
+for i=0, num_of_conditions-1 {
+  param3_v[i] = new Graph(0)
+  param3_ca[i] = new Graph(0)
+  param3_gates[i] = new Graph(0)
+}
+proto_num=0  // index into above graphs of protocol results
+
+proc setup_vectors_to_record() {
+// record voltages in the dendrite and the Spine[X].head X=0,1,2 (corresponds to paper spines 1 2 3)
+  dend_v_vec = new Vector()
+  dend_cai_vec= new Vector()
+
+  spine0_v_vec= new Vector()
+  spine1_v_vec= new Vector()
+  spine2_v_vec= new Vector()
+  spine0_cai_vec = new Vector()
+  spine1_cai_vec = new Vector()
+  spine2_cai_vec = new Vector()
+
+  m_ca_dend_vec = new Vector()
+  h_ca_dend_vec = new Vector()
+  m_ca_spine1_vec = new Vector()
+  h_ca_spine1_vec = new Vector()
+  m_ca_spine0_vec = new Vector()
+  h_ca_spine0_vec = new Vector()
+
+  t_vec = new Vector()
+  t_vec.indgen(0, tstop, dt)
+
+  spinelocation=adjacent_shaft_x_loc // record the dendrite where Spine[1] is attached
+  sprint(tmpstr, "dendrite.v(%f)", adjacent_shaft_x_loc) // used to be 180/dendrite.L
+  dend_v_vec.label(tmpstr)
+  spine0_v_vec.label("Spine[0].head.v(0.5)")
+  spine1_v_vec.label("Spine[1].head.v(0.5)")
+  spine2_v_vec.label("Spine[2].head.v(0.5)")
+
+  sprint(tmpstr,"dendrite.cai(%g)", spinelocation) // dend. comp. adj. to spine
+  dend_cai_vec.label(tmpstr)
+  spine0_cai_vec.label("Spine[0].head.cai(0.5)")
+  spine1_cai_vec.label("Spine[1].head.cai(0.5)")
+  spine2_cai_vec.label("Spine[2].head.cai(0.5)")
+
+  sprint(tmpstr,"dendrite.m_ca(%g)", spinelocation) // dend. comp. adj. to spine
+  m_ca_dend_vec.label(tmpstr)
+  sprint(tmpstr,"dendrite.h_ca(%g)", spinelocation) // dend. comp. adj. to spine
+  h_ca_dend_vec.label(tmpstr)
+  m_ca_spine1_vec.label("Spine[1].head.m_ca(0.5)")
+  h_ca_spine1_vec.label("Spine[1].head.h_ca(0.5)")
+  m_ca_spine0_vec.label("Spine[0].head.m_ca(0.5)")
+  h_ca_spine0_vec.label("Spine[0].head.h_ca(0.5)")
+
+  dend_v_vec.record(&dendrite.v(spinelocation), t_vec)
+  dend_cai_vec.record(&dendrite.cai(spinelocation), t_vec)
+
+  spine0_v_vec.record(&Spine[0].head.v(0.5), t_vec)
+  spine1_v_vec.record(&Spine[1].head.v(0.5), t_vec)
+  spine2_v_vec.record(&Spine[2].head.v(0.5), t_vec)
+
+  spine0_cai_vec.record(&Spine[0].head.cai(0.5), t_vec)
+  spine1_cai_vec.record(&Spine[1].head.cai(0.5), t_vec)
+  spine2_cai_vec.record(&Spine[2].head.cai(0.5), t_vec)
+
+  m_ca_dend_vec.record(&dendrite.m_ca(spinelocation), t_vec)
+  h_ca_dend_vec.record(&dendrite.h_ca(spinelocation), t_vec)
+  m_ca_spine1_vec.record(&Spine[1].head.m_ca(0.5), t_vec)
+  h_ca_spine1_vec.record(&Spine[1].head.h_ca(0.5), t_vec)
+  m_ca_spine0_vec.record(&Spine[0].head.m_ca(0.5), t_vec)
+  h_ca_spine0_vec.record(&Spine[0].head.h_ca(0.5), t_vec)
+}
+
+proc  write_vectors() {
+  sprint(tmpstr,"param3/%s/%s/spine0_cai.dat" , param_dir, proto_dir)
+  write_vec(tmpstr,t_vec, spine0_cai_vec)
+  sprint(tmpstr,"param3/%s/%s/spine1_cai.dat" , param_dir, proto_dir)
+  write_vec(tmpstr,t_vec, spine1_cai_vec)
+/* JUST THE ABOVE CALCIUM TRACES  
+  sprint(tmpstr,"param3/%s/spine2_cai.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, spine2_cai_vec)
+*/
+  sprint(tmpstr,"param3/%s/%s/spine0_v.dat" , param_dir, proto_dir)
+  write_vec(tmpstr,t_vec, spine0_v_vec)
+  sprint(tmpstr,"param3/%s/%s/spine1_v.dat" , param_dir, proto_dir)
+  write_vec(tmpstr,t_vec, spine1_v_vec)
+/* AND (ABOVE) THEIR ASSOCIATED VOLTAGE TRACES
+  sprint(tmpstr,"param3/%s/spine2_v.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, spine2_v_vec)
+  
+  sprint(tmpstr,"param3/%s/dend_v.dat" , proto_dir)
+  write_vec(tmpstr,t_vec,dend_v_vec)
+  sprint(tmpstr,"param3/%s/dend_cai.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, dend_cai_vec)
+
+  sprint(tmpstr,"param3/%s/m_ca_dend_vec.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, m_ca_dend_vec)
+  
+  sprint(tmpstr,"param3/%s/h_ca_dend_vec.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, h_ca_dend_vec)
+
+  sprint(tmpstr,"param3/%s/m_ca_spine1_vec.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, m_ca_spine1_vec)
+
+  sprint(tmpstr,"param3/%s/h_ca_spine1_vec.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, h_ca_spine1_vec)
+
+  sprint(tmpstr,"param3/%s/m_ca_spine0_vec.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, m_ca_spine0_vec)
+
+  sprint(tmpstr,"param3/%s/h_ca_spine0_vec.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, h_ca_spine0_vec)
+*/
+  spine0_cai_vec.line(param3_ca[proto_num],t_vec,3,1)
+  spine1_cai_vec.line(param3_ca[proto_num],t_vec,1,1)
+/*
+  spine2_cai_vec.line(param3_ca[proto_num],t_vec,2,1)
+*/
+  dend_cai_vec.line(param3_ca[proto_num],t_vec,5,1)
+  // graphs
+  param3_ca[proto_num].exec_menu("View = plot")
+  sprint(tmpstr,"param3 (18 cases) cai under protocol %s %s" , param_dir, proto_dir)
+  param3_ca[proto_num].label(.5,.95,tmpstr)
+  param3_ca[proto_num].view(0, 0, 500 , 0.0011, 180, 280, 300, 200)
+  
+  spine0_v_vec.line(param3_v[proto_num],t_vec,3,1)
+  spine1_v_vec.line(param3_v[proto_num],t_vec,1,1)
+//  spine2_v_vec.line(param3_v[proto_num],t_vec,2,1)
+  dend_v_vec.line(param3_v[proto_num],t_vec,5,1)
+  param3_v[proto_num].exec_menu("View = plot")
+
+  sprint(tmpstr,"param3 (18 cases) v under protocol %s %s" , param_dir, proto_dir)
+  param3_v[proto_num].label(.5,.95,tmpstr)
+  param3_v[proto_num].view(114, -70, 6 , 78, 200, 300, 300, 200)
+
+  m_ca_spine0_vec.line(param3_gates[proto_num], t_vec,1, 1)
+  h_ca_spine0_vec.line(param3_gates[proto_num], t_vec,2, 1)
+  m_ca_spine1_vec.line(param3_gates[proto_num], t_vec,3, 1)
+  h_ca_spine1_vec.line(param3_gates[proto_num], t_vec,4, 1)
+  m_ca_dend_vec.line(param3_gates[proto_num], t_vec,5, 1)
+  h_ca_dend_vec.line(param3_gates[proto_num], t_vec,6, 1)
+  param3_gates[proto_num].exec_menu("View = plot")
+  sprint(tmpstr,"param3 (18 cases) m_ca, h_ca under protocol %s %s" ,  param_dir, proto_dir)
+  param3_gates[proto_num].label(.5,.95,tmpstr)
+}
+
+proc run_model() {
+  print "model running with protocol ", param_dir,", ", proto_dir
+  setup_vectors_to_record()
+  init()
+  run()
+  write_vectors()
+}
+
+// Start of top-level script to run model with param3's 18 Conditions
+
+// first switch to semi-high (0.05 is high) neck resistance state:
+forsec "neck" {diam=0.07}
+forsec "neck" {Ra=200}
+// function is being broken up into 1)without and 2)with
+// functions so that graphs can be made with the vectors while they are
+// available.  These new functions immediately follow below
+proc bAP_without_with_spineinhib() {  // run each param3 bAP 
+  // case with and without spine inhibition
+  // the NC[] index is defined: 0=dend, 1, 2, 3 is Spine[0, 1, 2]
+  // spine_choice is 1, 2, or 3 whose default was 2 (middle spine) 
+  // 1) bAP                    //////////////////////////////////
+
+  // turn on bAP
+  MultIClamp[0].number=1 // turn on current injection that creates bAP
+  NC[spine_choice].weight = 0.0 // 0.0004 is 4 nS (0 spine synapse is off)
+
+  proto_dir="bAP"
+  run_model()
+  proto_num=proto_num+1
+
+  prestimulus_time=99.9
+  prestimulus_index=1998 // the 1999th element
+  // baseline B
+  B=spine1_cai_vec.x[prestimulus_index]
+  index_end = 150/dt // might be 3000 (dt=0.05) or 6000 (dt=0.025) to find
+                     // an index after the first AP but hopefully before
+                     // the second if another AP should occur
+  Ca_peak_ctrl = spine1_cai_vec.c(0,index_end).max()
+  // leave bAP on
+
+  // 2) bAP + inhib in spine   //////////////////////////////////
+
+  // bAP left on from above, now spine inihib turned back on
+  NC[spine_choice].weight = 0.0004 // 4e-4 uS = 0.4 nS
+
+  proto_dir="bAPspineinhib"
+  run_model()
+  Ca_peak_inhib = spine1_cai_vec.c(0, index_end).max()
+  proto_num=proto_num+1
+  dCa_ratio=(Ca_peak_inhib-B)/(Ca_peak_ctrl-B)
+
+  sprint(tmpstr,"param3/%s/dCa_inhib.txt",param_dir)
+  f.wopen(tmpstr)
+  sprint(tmpstr,"%g\n",Ca_peak_inhib-B)
+  f.printf(tmpstr)
+  f.close()
+
+  sprint(tmpstr,"param3/%s/dCa_ctrl.txt",param_dir)
+  f.wopen(tmpstr)
+  sprint(tmpstr,"%g\n",Ca_peak_ctrl-B)
+  f.printf(tmpstr)
+  f.close()
+
+  sprint(tmpstr,"param3/%s/dCa_ratio.txt",param_dir)
+  f.wopen(tmpstr)
+  sprint(tmpstr,"%g\n",dCa_ratio)
+  f.printf(tmpstr)
+  f.close()
+}
+proc bAP_without_spineinhib() {  // run each param3 bAP 
+  // case without spine inhibition
+  // the NC[] index is defined: 0=dend, 1, 2, 3 is Spine[0, 1, 2]
+  // spine_choice is 1, 2, or 3 whose default was 2 (middle spine) 
+  // 1) bAP                    //////////////////////////////////
+
+  // turn on bAP
+  MultIClamp[0].number=1 // turn on current injection that creates bAP
+  NC[spine_choice].weight = 0.0 // 0.0004 is 4 nS (0 spine synapse is off)
+
+  proto_dir="bAP"
+  run_model()
+  proto_num=proto_num+1
+
+  prestimulus_time=99.9
+  prestimulus_index=1998 // the 1999th element
+  // baseline B
+  B=spine1_cai_vec.x[prestimulus_index]
+  index_end = 150/dt  // two limit to first AP hopefully
+  Ca_peak_ctrl = spine1_cai_vec.c(0,index_end).max()
+  // leave bAP on
+} // end of bAP (alone) without inhibition
+
+proc bAP_with_spineinhib() {  // run each param3 bAP 
+  // case with spine inhibition
+  // the NC[] index is defined: 0=dend, 1, 2, 3 is Spine[0, 1, 2]
+  // spine_choice is 1, 2, or 3 whose default was 2 (middle spine) 
+  // 2) bAP + inhib in spine   //////////////////////////////////
+
+  // bAP left on from above, now spine inihib turned back on
+  NC[spine_choice].weight = 0.0004 // 4e-4 uS = 0.4 nS
+
+  proto_dir="bAPspineinhib"
+  run_model()
+  index_end = 150/dt // to limit to first AP hopefully
+  Ca_peak_inhib = spine1_cai_vec.c(0, index_end).max()
+  proto_num=proto_num+1
+  dCa_ratio=(Ca_peak_inhib-B)/(Ca_peak_ctrl-B)
+
+  sprint(tmpstr,"param3/%s/dCa_inhib.txt",param_dir)
+  f.wopen(tmpstr)
+  sprint(tmpstr,"%g\n",Ca_peak_inhib-B)
+  f.printf(tmpstr)
+  f.close()
+
+  sprint(tmpstr,"param3/%s/dCa_ctrl.txt",param_dir)
+  f.wopen(tmpstr)
+  sprint(tmpstr,"%g\n",Ca_peak_ctrl-B)
+  f.printf(tmpstr)
+  f.close()
+
+  sprint(tmpstr,"param3/%s/dCa_ratio.txt",param_dir)
+  f.wopen(tmpstr)
+  sprint(tmpstr,"%g\n",dCa_ratio)
+  f.printf(tmpstr)
+  f.close()
+}
+
+/* *******************
+This is the master controller section of the code where the
+parameters are set to desired values and then the model
+is run both with and without inhibition by calling the
+function bAP_without_with_spineinhib()
+
+During this process the following graphs and tables are generated
+
+Graph panels of Ca traces for:
+
+1) mshift_graph: mshift_m15 mshift_zero mshift_15
+2) ECl_graph: ECl_m90 ECl_m70 ECl_m40
+3) gbar_ca_graph: gbar_ca0p5x gbar_ca1x gbar_ca2x
+
+Tables of dCa_ratio and also the numer/denominator that determine
+dCa_ratio: The following vectors hold those dCa quantities under the
+following conditions.
+
+1) mshift_table_vec, mshift_num_vec, mshift_denom_vec: mshift_m15
+mshift_zero mshift_15
+2) ECl_table_vec, ECl_num_vec, ECl_denom_vec: ECl_m90 ECl_m70 ECl_m40
+3) gbar_ca_table_vec, gbar_ca_num_vec, gbar_ca_denom_vec: gbar_ca0p5x
+gbar_ca1x gbar_ca2x
+
+At the end of this script the tables are printed at the oc> prompt.
+**********************************************
+*/
+objref mshift_hbox, ECl_hbox, gbar_ca_hbox
+objref mshift_graph[3], ECl_graph[3], gbar_ca_graph[3]
+objref mshift_table_vec, mshift_table_header_vec
+objref mshift_num_vec, mshift_denom_vec
+objref ECl_table_vec, ECl_table_header_vec
+objref ECl_num_vec, ECl_denom_vec
+objref gbar_ca_table_vec,gbar_ca_table_header_vec
+objref gbar_ca_num_vec, gbar_ca_denom_vec
+
+mshift_hbox = new HBox()
+ECl_hbox = new HBox()
+gbar_ca_hbox = new HBox()
+
+for i=0,2 {
+  mshift_hbox.intercept(1)
+  mshift_graph[i] = new Graph()
+  mshift_hbox.intercept(0)
+  ECl_hbox.intercept(1)
+  ECl_graph[i] = new Graph()
+  ECl_hbox.intercept(0)
+  gbar_ca_hbox.intercept(1)
+  gbar_ca_graph[i] = new Graph()
+  gbar_ca_hbox.intercept(0)
+}
+
+mshift_table_vec = new Vector()
+mshift_table_header_vec = new Vector()
+mshift_num_vec = new Vector()
+mshift_denom_vec = new Vector()
+ECl_table_vec = new Vector()
+ECl_table_header_vec = new Vector()
+ECl_num_vec = new Vector()
+ECl_denom_vec = new Vector()
+gbar_ca_table_vec = new Vector()
+gbar_ca_table_header_vec = new Vector()
+gbar_ca_num_vec = new Vector()
+gbar_ca_denom_vec = new Vector()
+
+proto_num = 0 // initialize counter which is subsequently
+// incremented in bAP_without_with_spineinhib()
+
+// param3/mshift_m15/[bAP, bAPspineinhib]
+param_dir = "mshift_m15"
+mshift_ca = -15
+
+bAP_without_spineinhib()
+
+spine0_cai_vec.line(mshift_graph[0],t_vec,1,0)
+spine1_cai_vec.line(mshift_graph[0],t_vec,1,0)
+mshift_denom_vec.append(Ca_peak_ctrl-B)
+mshift_table_header_vec.append(mshift_ca)
+
+bAP_with_spineinhib()
+
+spine0_cai_vec.line(mshift_graph[0],t_vec,3,0)
+spine1_cai_vec.line(mshift_graph[0],t_vec,2,0)
+mshift_num_vec.append(Ca_peak_inhib-B)
+sprint(tmpstr,"cai vs t in two spine heads, mshift=%g, black ctrl, red inhib, blue adj. spine", mshift_ca)
+mshift_graph[0].label(0.4,0.9,tmpstr)
+mshift_graph[0].exec_menu("View = plot")
+
+// param3/mshift_zero/[bAP, bAPspineinhib]
+param_dir = "mshift_zero"
+mshift_ca = 0
+
+bAP_without_spineinhib()
+
+spine0_cai_vec.line(mshift_graph[1],t_vec,1,0)
+spine1_cai_vec.line(mshift_graph[1],t_vec,1,0)
+mshift_denom_vec.append(Ca_peak_ctrl-B)
+mshift_table_header_vec.append(mshift_ca)
+
+bAP_with_spineinhib()
+
+spine0_cai_vec.line(mshift_graph[1],t_vec,3,0)
+spine1_cai_vec.line(mshift_graph[1],t_vec,2,0)
+mshift_num_vec.append(Ca_peak_inhib-B)
+sprint(tmpstr,"cai vs t in two spine heads, mshift=%g, black ctrl, red inhib, blue adj. spine", mshift_ca)
+mshift_graph[1].label(0.4,0.9,tmpstr)
+mshift_graph[1].exec_menu("View = plot")
+
+// param3/mshift_15/[bAP, bAPspineinhib]
+param_dir = "mshift_15"
+mshift_ca = 15
+
+bAP_without_spineinhib()
+
+spine0_cai_vec.line(mshift_graph[2],t_vec,1,0)
+spine1_cai_vec.line(mshift_graph[2],t_vec,1,0)
+mshift_denom_vec.append(Ca_peak_ctrl-B)
+mshift_table_header_vec.append(mshift_ca)
+
+bAP_with_spineinhib()
+
+spine0_cai_vec.line(mshift_graph[2],t_vec,3,0)
+spine1_cai_vec.line(mshift_graph[2],t_vec,2,0)
+mshift_num_vec.append(Ca_peak_inhib-B)
+sprint(tmpstr,"cai vs t in two spine heads, mshift=%g, black ctrl, red inhib, blue adj. spine", mshift_ca)
+mshift_graph[2].label(0.4,0.9,tmpstr)
+mshift_graph[2].exec_menu("View = plot")
+mshift_hbox.map()
+print "mshift tables header"
+{mshift_table_header_vec.printf()}
+print "dCa_inhib (numerators)"
+mshift_num_vec.printf()
+print "dCa_ctrl (denominators)"
+mshift_denom_vec.printf()
+print "dCa_ratio"
+mshift_num_vec.c.div(mshift_denom_vec).printf()
+print " "
+mshift_ca=0 // reset to default for future simulations not related to shifting ca activation
+
+// param3/ECl_m90/[bAP, bAPspineinhib]
+param_dir = "ECl_m90"
+Exp2Syn[2].e = -90 // middle spines gabaa synapse reversal potential
+
+bAP_without_spineinhib()
+
+spine0_cai_vec.line(ECl_graph[0],t_vec,1,0)
+spine1_cai_vec.line(ECl_graph[0],t_vec,1,0)
+ECl_denom_vec.append(Ca_peak_ctrl-B)
+ECl_table_header_vec.append(Exp2Syn[2].e)
+
+bAP_with_spineinhib()
+
+spine0_cai_vec.line(ECl_graph[0],t_vec,3,0)
+spine1_cai_vec.line(ECl_graph[0],t_vec,2,0)
+ECl_num_vec.append(Ca_peak_inhib-B)
+sprint(tmpstr,"cai vs t in two spine heads, ECl=%g, black ctrl, red inhib, blue adj. spine", Exp2Syn[2].e)
+ECl_graph[0].label(0.4,0.9,tmpstr)
+ECl_graph[0].exec_menu("View = plot")
+
+// param3/ECl_m70/[bAP, bAPspineinhib]
+param_dir = "ECl_m70"
+Exp2Syn[2].e = -70 // middle spines gabaa synapse reversal potential
+
+bAP_without_spineinhib()
+
+spine0_cai_vec.line(ECl_graph[1],t_vec,1,0)
+spine1_cai_vec.line(ECl_graph[1],t_vec,1,0)
+ECl_denom_vec.append(Ca_peak_ctrl-B)
+ECl_table_header_vec.append(Exp2Syn[2].e)
+
+bAP_with_spineinhib()
+
+spine0_cai_vec.line(ECl_graph[1],t_vec,3,0)
+spine1_cai_vec.line(ECl_graph[1],t_vec,2,0)
+ECl_num_vec.append(Ca_peak_inhib-B)
+sprint(tmpstr,"cai vs t in two spine heads, ECl=%g, black ctrl, red inhib, blue adj. spine", Exp2Syn[2].e)
+ECl_graph[1].label(0.4,0.9,tmpstr)
+ECl_graph[1].exec_menu("View = plot")
+
+// param3/ECl_m40/[bAP, bAPspineinhib]
+param_dir = "ECl_m40"
+Exp2Syn[2].e = -40 // middle spines gabaa synapse reversal potential
+
+bAP_without_spineinhib()
+
+spine0_cai_vec.line(ECl_graph[2],t_vec,1,0)
+spine1_cai_vec.line(ECl_graph[2],t_vec,1,0)
+ECl_denom_vec.append(Ca_peak_ctrl-B)
+ECl_table_header_vec.append(Exp2Syn[2].e)
+
+bAP_with_spineinhib()
+
+spine0_cai_vec.line(ECl_graph[2],t_vec,3,0)
+spine1_cai_vec.line(ECl_graph[2],t_vec,2,0)
+ECl_num_vec.append(Ca_peak_inhib-B)
+sprint(tmpstr,"cai vs t in two spine heads, ECl=%g, black ctrl, red inhib, blue adj. spine", Exp2Syn[2].e)
+ECl_graph[2].label(0.4,0.9,tmpstr)
+ECl_graph[2].exec_menu("View = plot")
+ECl_hbox.map()
+print "ECl tables header"
+{ECl_table_header_vec.printf()}
+print "dCa_inhib (numerators)"
+ECl_num_vec.printf()
+print "dCa_ctrl (denominators)"
+ECl_denom_vec.printf()
+print "dCa_ratio"
+ECl_num_vec.c.div(ECl_denom_vec).printf()
+print " "
+
+Exp2Syn[2].e = -70 // reset to default middle spines gabaa synapse reversal potential
+
+// param3/gbar_ca0p5x/[bAP, bAPspineinhib]
+// First store the default vaules:
+default_soma_gbar_ca = soma.gbar_ca(0.5)
+default_dend_gbar_ca = dendrite.gbar_ca(0.5)
+
+param_dir = "gbar_ca0p5x"
+soma for(x,0) gbar_ca(x) = default_soma_gbar_ca * 0.5
+dendrite for(x,0) gbar_ca(x) = default_dend_gbar_ca * 0.5
+forsec "Spine" gbar_ca(0.5) = default_dend_gbar_ca * 0.5
+
+bAP_without_spineinhib()
+
+spine0_cai_vec.line(gbar_ca_graph[0],t_vec,1,0)
+spine1_cai_vec.line(gbar_ca_graph[0],t_vec,1,0)
+gbar_ca_denom_vec.append(Ca_peak_ctrl-B)
+gbar_ca_table_header_vec.append(0.5)
+
+bAP_with_spineinhib()
+
+spine0_cai_vec.line(gbar_ca_graph[0],t_vec,3,0)
+spine1_cai_vec.line(gbar_ca_graph[0],t_vec,2,0)
+gbar_ca_num_vec.append(Ca_peak_inhib-B)
+sprint(tmpstr,"cai vs t in two spine heads, gbar_ca=%gx, black ctrl, red inhib, blue adj. spine", .5)
+gbar_ca_graph[0].label(0.4,0.9,tmpstr)
+gbar_ca_graph[0].exec_menu("View = plot")
+
+// param3/gbar_ca1x/[bAP, bAPspineinhib]
+param_dir = "gbar_ca1x"
+soma for(x,0) gbar_ca(x) = default_soma_gbar_ca
+dendrite for(x,0) gbar_ca(x) = default_dend_gbar_ca
+forsec "Spine" gbar_ca(0.5) = default_dend_gbar_ca
+bAP_without_spineinhib()
+
+spine0_cai_vec.line(gbar_ca_graph[1],t_vec,1,0)
+spine1_cai_vec.line(gbar_ca_graph[1],t_vec,1,0)
+gbar_ca_denom_vec.append(Ca_peak_ctrl-B)
+gbar_ca_table_header_vec.append(1)
+
+bAP_with_spineinhib()
+
+spine0_cai_vec.line(gbar_ca_graph[1],t_vec,3,0)
+spine1_cai_vec.line(gbar_ca_graph[1],t_vec,2,0)
+gbar_ca_num_vec.append(Ca_peak_inhib-B)
+sprint(tmpstr,"cai vs t in two spine heads, gbar_ca=%gx, black ctrl, red inhib, blue adj. spine", 1)
+gbar_ca_graph[1].label(0.4,0.9,tmpstr)
+gbar_ca_graph[1].exec_menu("View = plot")
+
+// param3/gbar_ca2x/[bAP, bAPspineinhib]
+param_dir = "gbar_ca2x"
+soma for(x,0) gbar_ca(x) = default_soma_gbar_ca * 2
+dendrite for(x,0) gbar_ca(x) = default_dend_gbar_ca * 2
+forsec "Spine" gbar_ca(0.5) = default_dend_gbar_ca * 2
+
+bAP_without_spineinhib()
+
+spine0_cai_vec.line(gbar_ca_graph[2],t_vec,1,0)
+spine1_cai_vec.line(gbar_ca_graph[2],t_vec,1,0)
+gbar_ca_denom_vec.append(Ca_peak_ctrl-B)
+gbar_ca_table_header_vec.append(2)
+
+bAP_with_spineinhib()
+
+spine0_cai_vec.line(gbar_ca_graph[2],t_vec,3,0)
+spine1_cai_vec.line(gbar_ca_graph[2],t_vec,2,0)
+gbar_ca_num_vec.append(Ca_peak_inhib-B)
+sprint(tmpstr,"cai vs t in two spine heads, gbar_ca=%gx, black ctrl, red inhib, blue adj. spine", 2)
+gbar_ca_graph[2].label(0.4,0.9,tmpstr)
+gbar_ca_graph[2].exec_menu("View = plot")
+gbar_ca_hbox.map()
+print "gbar_ca tables header"
+{gbar_ca_table_header_vec.printf()}
+print "dCa_inhib (numerators)"
+gbar_ca_num_vec.printf()
+print "dCa_ctrl (denominators)"
+gbar_ca_denom_vec.printf()
+print "dCa_ratio"
+gbar_ca_num_vec.c.div(gbar_ca_denom_vec).printf()
+print " "
+
+// restore to default
+soma for(x,0) gbar_ca(x) = default_soma_gbar_ca
+dendrite for(x,0) gbar_ca(x) = default_dend_gbar_ca
+forsec "Spine" gbar_ca(0.5) = default_dend_gbar_ca

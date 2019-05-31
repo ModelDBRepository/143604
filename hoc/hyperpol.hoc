@@ -1,0 +1,50 @@
+// hyperpol.hoc
+// hyperpolarizing protocol
+
+dendrite {
+  gbar_na = 1066.67
+  gbar_kv = 533.333
+  // change diam = 2 in hoc/dendrite_morphology.hoc if desired
+}
+
+// IClamp[0].amp = -0.017
+IClamp[0].amp = 0 // NTC
+proc toggle_IClamp0() {
+  if (hyperpol_current_on) {
+  //  hyperpol_current_on = 1
+    IClamp[0].del=0
+    IClamp[0].dur=1e6
+    IClamp[0].amp = hyperpol_current_value
+
+  } else {
+  //  hyperpol_current_on = 0
+    IClamp[0].del=0
+    IClamp[0].dur=1e6
+    IClamp[0].amp = 0
+  }
+}
+proc hyperpol_iclamp_on() {
+  IClamp[0].del=0
+  IClamp[0].dur=1e6
+  IClamp[0].amp=hyperpol_current_value  // -0.017 for diam 2, for diam 1 use -0.008 // found to hyperpol cell soma to -85 mV
+}
+proc hyperpol_iclamp_off() {
+  IClamp[0].del=0
+  IClamp[0].dur=1e6
+  IClamp[0].amp=-0.00 // turn off
+}
+// hyperpol_current_value = -0.017 // -0.017 for diam 2, for diam 1 use -0.008: these found to hyperpol cell soma approx. -84 mV
+// NTC
+hyperpol_current_value = 0 // -0.017 for diam 2, for diam 1 use -0.008: these found to hyperpol cell soma approx. -84 mV
+hyperpol_current_on = 0 // 0 for off , 1 for on
+proc display_hyperpol() {
+  xpanel("IClamp for hyperpol")
+    xstatebutton("Hyperpolarization current (on when checked)", &hyperpol_current_on, "toggle_IClamp0()")
+    xvalue("Hyperpolarizing current","hyperpol_current_value")
+//  xbutton("Hyperpolarizing current from IClamp[0]", "hyperpol_iclamp_on()")
+//  xbutton("Turn off hyperpolarizing current from IClamp[0]","hyperpol_iclamp_off()")
+  xpanel()
+}
+
+// display_hyperpol() // fell out of use as matching hyperpol experiment had multiple issues
+

@@ -1,0 +1,347 @@
+// dend_shaft_bAP_functions.hoc
+/*
+
+Contains the create and write vector functions and associated
+declarations modified from param3.hoc (which calculated simulations
+for changes in the 3 parameters mshift (in ca current), ECl, gbar_ca)
+
+(Modified from param3 documentation:)
+
+For the following send traces
+
+I) control Ca traces (protocol bAP)
+II) Ca with inhib (bAPdendinhib)
+III) calculate dCa for control and inhibited and their ratio for each
+compartment:
+dCa(inhibited)/dCa(control) = ([Ca2+]peak,inh - B)/([Ca2+]peak,ctrl - B)
+calculated from I), II):
+dCa_ratio.txt
+IV) record also the dCa(inhibited), dCa(control) values separately
+dCa_inhib.txt
+dCa_ctrl.txt
+
+The calcium and voltage trace files are stored in "proto_dir/file" 
+where protocols directory proto_dir can be upto
+
+inhibspine, 1xinhibdend, 10xinhibdend, bAP, bAPinhibspine, bAP10xinhibdend,
+bAP1xinhibdend
+
+and files can be as many as spine0_ca, spine1_ca, spine2_ca, dend_ca, spine0_v,
+spine1_v, spine2, dend_v
+
+however here unlike in FiveConditions.hoc, the protocols and files are
+limited to X/bAP X/bAPspineinhib and spine1_ca, spine0_ca where spine1
+is the middle spine head, and spine0 is the proximal spine head
+(receives a smaller bAP typically because of the slight increase in
+bAP amplitude as a function of distance along the dendrite.
+*/
+// "denominator" divides Na K max conductances so is bAP height controller 
+denominator = 1 // will be denominators of 1/1, 1/2, 1/4, 1/8, 1/16
+strdef proto_dir
+strdef filename
+objref f // temporary file object
+f = new File()
+
+objref dend_v_vec, spine0_v_vec, spine1_v_vec, spine2_v_vec
+objref dend_cai_vec, spine0_cai_vec, spine1_cai_vec, spine2_cai_vec
+// tstop= 1 // test condition
+// below are graphs (the 5 conditions turned into 6 with the addition
+// of protocol bAP + 1x inhibition in dendrite
+num_of_conditions = 10 // ctrl and inhib for 1,1/2,1/4,1/8,1/16 // 18
+objref  graphs_v[num_of_conditions], graphs_ca[num_of_conditions], graphs_gates[num_of_conditions]
+objref graph_bAP_envelopes
+// add the activation and inactivation curves for the ca chan in spines and dend
+objref m_ca_dend_vec, h_ca_dend_vec, m_ca_spine1_vec, h_ca_spine1_vec
+objref  m_ca_spine0_vec, h_ca_spine0_vec
+objref bAP_peak_v_vec, bAP_peak_v_x_vec, bAP_profile_vec
+
+for i=0, num_of_conditions-1 {
+  graphs_v[i] = new Graph(0)
+  graphs_ca[i] = new Graph(0)
+  graphs_gates[i] = new Graph(0)
+}
+graph_bAP_envelopes = new Graph()
+
+proto_num=0  // index into above graphs of protocol results
+
+proc setup_vectors_to_record() {
+// record voltages in the dendrite and the Spine[X].head X=0,1,2 (corresponds to paper spines 1 2 3)
+  dend_v_vec = new Vector()
+  dend_cai_vec= new Vector()
+
+  spine0_v_vec= new Vector()
+  spine1_v_vec= new Vector()
+  spine2_v_vec= new Vector()
+  spine0_cai_vec = new Vector()
+  spine1_cai_vec = new Vector()
+  spine2_cai_vec = new Vector()
+
+  m_ca_dend_vec = new Vector()
+  h_ca_dend_vec = new Vector()
+  m_ca_spine1_vec = new Vector()
+  h_ca_spine1_vec = new Vector()
+  m_ca_spine0_vec = new Vector()
+  h_ca_spine0_vec = new Vector()
+  bAP_peak_v_vec = new Vector()
+  bAP_peak_v_x_vec = new Vector()
+  t_vec = new Vector()
+  t_vec.indgen(0, tstop, dt)
+
+  spinelocation=adjacent_shaft_x_loc // record the dendrite where Spine[1] is attached
+  sprint(tmpstr, "dendrite.v(%f)", adjacent_shaft_x_loc) // used to be 180/dendrite.L
+  dend_v_vec.label(tmpstr)
+  spine0_v_vec.label("Spine[0].head.v(0.5)")
+  spine1_v_vec.label("Spine[1].head.v(0.5)")
+  spine2_v_vec.label("Spine[2].head.v(0.5)")
+
+  sprint(tmpstr,"dendrite.cai(%g)", spinelocation) // dend. comp. adj. to spine
+  dend_cai_vec.label(tmpstr)
+  spine0_cai_vec.label("Spine[0].head.cai(0.5)")
+  spine1_cai_vec.label("Spine[1].head.cai(0.5)")
+  spine2_cai_vec.label("Spine[2].head.cai(0.5)")
+
+  sprint(tmpstr,"dendrite.m_ca(%g)", spinelocation) // dend. comp. adj. to spine
+  m_ca_dend_vec.label(tmpstr)
+  sprint(tmpstr,"dendrite.h_ca(%g)", spinelocation) // dend. comp. adj. to spine
+  h_ca_dend_vec.label(tmpstr)
+  m_ca_spine1_vec.label("Spine[1].head.m_ca(0.5)")
+  h_ca_spine1_vec.label("Spine[1].head.h_ca(0.5)")
+  m_ca_spine0_vec.label("Spine[0].head.m_ca(0.5)")
+  h_ca_spine0_vec.label("Spine[0].head.h_ca(0.5)")
+
+  dend_v_vec.record(&dendrite.v(spinelocation), t_vec)
+  dend_cai_vec.record(&dendrite.cai(spinelocation), t_vec)
+
+  spine0_v_vec.record(&Spine[0].head.v(0.5), t_vec)
+  spine1_v_vec.record(&Spine[1].head.v(0.5), t_vec)
+  spine2_v_vec.record(&Spine[2].head.v(0.5), t_vec)
+
+  spine0_cai_vec.record(&Spine[0].head.cai(0.5), t_vec)
+  spine1_cai_vec.record(&Spine[1].head.cai(0.5), t_vec)
+  spine2_cai_vec.record(&Spine[2].head.cai(0.5), t_vec)
+
+  m_ca_dend_vec.record(&dendrite.m_ca(spinelocation), t_vec)
+  h_ca_dend_vec.record(&dendrite.h_ca(spinelocation), t_vec)
+  m_ca_spine1_vec.record(&Spine[1].head.m_ca(0.5), t_vec)
+  h_ca_spine1_vec.record(&Spine[1].head.h_ca(0.5), t_vec)
+  m_ca_spine0_vec.record(&Spine[0].head.m_ca(0.5), t_vec)
+  h_ca_spine0_vec.record(&Spine[0].head.h_ca(0.5), t_vec)
+}
+
+proc  write_vectors() {
+  sprint(tmpstr,"NaKgs/1/%d/%s/spine0_cai.dat", denominator, proto_dir)
+  write_vec(tmpstr,t_vec, spine0_cai_vec)
+  sprint(tmpstr,"NaKgs/1/%d/%s/spine1_cai.dat", denominator, proto_dir)
+  write_vec(tmpstr,t_vec, spine1_cai_vec)
+  sprint(tmpstr,"NaKgs/1/%d/%s/spine2_cai.dat", denominator, proto_dir)
+  write_vec(tmpstr,t_vec, spine2_cai_vec)
+  sprint(tmpstr,"NaKgs/1/%d/%s/spine0_v.dat", denominator, proto_dir)
+
+  write_vec(tmpstr,t_vec, spine0_v_vec)
+  sprint(tmpstr,"NaKgs/1/%d/%s/spine1_v.dat", denominator, proto_dir)
+  write_vec(tmpstr,t_vec, spine1_v_vec)
+  sprint(tmpstr,"NaKgs/1/%d/%s/spine2_v.dat", denominator, proto_dir)
+  write_vec(tmpstr,t_vec, spine2_v_vec)
+  
+  sprint(tmpstr,"NaKgs/1/%d/%s/dend_v.dat", denominator, proto_dir)
+  write_vec(tmpstr,t_vec,dend_v_vec)
+  sprint(tmpstr,"NaKgs/1/%d/%s/dend_cai.dat", denominator, proto_dir)
+  write_vec(tmpstr,t_vec, dend_cai_vec)
+/* leave out ca activation inactivation for now
+  Note will need to fix below by adding denominator folder if decide to include
+  sprint(tmpstr,"NaKgs/1/%d/m_ca_dend_vec.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, m_ca_dend_vec)
+  
+  sprint(tmpstr,"NaKgs/1/%d/h_ca_dend_vec.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, h_ca_dend_vec)
+
+  sprint(tmpstr,"NaKgs/1/%d/m_ca_spine1_vec.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, m_ca_spine1_vec)
+
+  sprint(tmpstr,"NaKgs/1/%d/h_ca_spine1_vec.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, h_ca_spine1_vec)
+
+  sprint(tmpstr,"NaKgs/1/%d/m_ca_spine0_vec.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, m_ca_spine0_vec)
+
+  sprint(tmpstr,"NaKgs/1/%d/h_ca_spine0_vec.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, h_ca_spine0_vec)
+*/
+  spine0_cai_vec.line(graphs_ca[proto_num],t_vec,3,1)
+  spine1_cai_vec.line(graphs_ca[proto_num],t_vec,1,1)
+  spine2_cai_vec.line(graphs_ca[proto_num],t_vec,2,1)
+  dend_cai_vec.line(graphs_ca[proto_num],t_vec,5,1)
+  // graphs
+  graphs_ca[proto_num].exec_menu("View = plot")
+  sprint(tmpstr,"cai under protocol 1/%d %s" , denominator, proto_dir)
+  graphs_ca[proto_num].label(.5,.95,tmpstr)
+  graphs_ca[proto_num].view(0, 0, 500 , 0.0011, 180, 280, 300, 200)
+  
+  spine0_v_vec.line(graphs_v[proto_num],t_vec,3,1)
+  spine1_v_vec.line(graphs_v[proto_num],t_vec,1,1)
+  spine2_v_vec.line(graphs_v[proto_num],t_vec,2,1)
+  dend_v_vec.line(graphs_v[proto_num],t_vec,5,1)
+  graphs_v[proto_num].exec_menu("View = plot")
+
+  sprint(tmpstr,"v under protocol 1/%d %s" , denominator, proto_dir)
+  graphs_v[proto_num].label(.5,.95,tmpstr)
+  graphs_v[proto_num].view(114, -70, 6 , 78, 200, 300, 300, 200)
+
+  m_ca_spine0_vec.line(graphs_gates[proto_num], t_vec,1, 1)
+  h_ca_spine0_vec.line(graphs_gates[proto_num], t_vec,2, 1)
+  m_ca_spine1_vec.line(graphs_gates[proto_num], t_vec,3, 1)
+  h_ca_spine1_vec.line(graphs_gates[proto_num], t_vec,4, 1)
+  m_ca_dend_vec.line(graphs_gates[proto_num], t_vec,5, 1)
+  h_ca_dend_vec.line(graphs_gates[proto_num], t_vec,6, 1)
+  graphs_gates[proto_num].exec_menu("View = plot")
+  sprint(tmpstr,"m_ca, h_ca under protocol 1/%d %s" ,  denominator, proto_dir)
+  graphs_gates[proto_num].label(.5,.95,tmpstr)
+  // save the bAP peak v envelope (column 2) as a function of distance (column 1)
+  bAP_peak_v_vec = new Vector()
+  bAP_peak_v_x_vec = new Vector()
+
+  dendrite for (x,0) {
+    bAP_peak_v_vec.append(vmax_ds(x))
+    bAP_peak_v_x_vec.append(x*L)
+  }
+  sprint(tmpstr,"NaKgs/1/%d/%s/bAP_envelop.dat", denominator, proto_dir)
+  write_vec(tmpstr, bAP_peak_v_x_vec, bAP_peak_v_vec)
+  bAP_peak_v_vec.line(graph_bAP_envelopes, bAP_peak_v_x_vec, proto_num%2+1, 1) // proto_num colors avoids white
+  graph_bAP_envelopes.exec_menu("View = plot")
+  xopen("hoc/annotate_bAP_envelope_graph.ses") // hoc only opens this once
+}
+
+proc run_model() {
+  print "model running with protocol gs at 1/", denominator,", ", proto_dir
+  setup_vectors_to_record()
+  init()
+  run()
+  write_vectors()
+}
+
+// Start of top-level script to run model with X Conditions
+
+// first switch to semi-high (0.05 is high) neck resistance state:
+forsec "neck" {diam=0.07}
+forsec "neck" {Ra=200}
+// function is being broken up into 1)without and 2)with
+// functions so that graphs can be made with the vectors while they are
+// available.  These new functions immediately follow below
+
+dend_choice = 0 // the special subscript 0 selects the NetCon for the
+// dendrite compartment near Spine[1].  Note spine_choice (defined to
+// be 2) gives the NetCon for the inhibited middle spine (Spine[1] of
+// [0], [1], [2] spines)
+
+proc bAP_without_with_dendinhib() {  // run each (param3 or NaKgs) bAP 
+  // case with and without spine inhibition (param3) or dend inhib (NaKgs)
+  // the NC[] index is defined: 0=dend, 1, 2, 3 is Spine[0, 1, 2]
+  // spine_choice is 1, 2, or 3 whose default was 2 (middle spine) 
+  // 1) bAP                    //////////////////////////////////
+
+  // In each NaKgs/numerator/denominator/ctrl_or_inhib store:
+  // bAP_peak_profile.txt, spine0_cai_vec.txt, spine1_cai_vec.txt,
+  // spine2_cai_vec.txt, dend_cai_vec.txt spine0_v_vec.txt,
+  // spine1_v_vec.txt, spine2_v_vec.txt, dend_v_vec.txt
+  // The above are written in write_vectors() called from run_model()
+  // 
+  // and then in the top level NaK_gs/numerator/denominator/ store
+  // statistics_table.txt which contains a copy of the below printed
+  // table (on oc> prompt as simulation runs) that looks like this
+  //
+  // Na K g's: 1/(denominator)
+  // compartment V_peak_ctrl V_peak_inhib Ca_peak Ca_baseline dCa_ctrl dCa_inhib dCa_ratio
+  // spine0 (A B C D E F)
+  // spine1 (A B C D E F)
+  // spine2 (A B C D E F)
+  // dend (A B C D E F)
+  //
+
+  // turn on bAP
+  MultIClamp[0].number=1 // turn on current injection that creates bAP
+  NC[dend_choice].weight = 0.0 // 0.0004 is 4 nS (0 spine synapse is off)
+
+  proto_dir="bAP"
+  run_model()
+  proto_num=proto_num+1
+
+  prestimulus_time=99.9
+  prestimulus_index=prestimulus_time/dt // 1998, the 1999th element for dt=.05
+
+  index_end = 150/dt // might be 3000 (dt=0.05) or 6000 (dt=0.025) to find
+                     // an index after the first AP but hopefully before
+                     // the second if another AP should occur
+  // baseline B
+  spine0_B_ctrl=spine0_cai_vec.x[prestimulus_index]
+  spine1_B_ctrl=spine1_cai_vec.x[prestimulus_index]
+  spine2_B_ctrl=spine2_cai_vec.x[prestimulus_index]
+  dend_B_ctrl=dend_cai_vec.x[prestimulus_index]
+
+  spine0_Ca_peak_ctrl = spine0_cai_vec.c(prestimulus_index,index_end).max()
+  spine1_Ca_peak_ctrl = spine1_cai_vec.c(prestimulus_index,index_end).max()
+  spine2_Ca_peak_ctrl = spine2_cai_vec.c(prestimulus_index,index_end).max()
+  dend_Ca_peak_ctrl = dend_cai_vec.c(prestimulus_index,index_end).max()
+
+  spine0_v_peak_ctrl = spine0_v_vec.c(prestimulus_index,index_end).max()
+  spine1_v_peak_ctrl = spine1_v_vec.c(prestimulus_index,index_end).max()
+  spine2_v_peak_ctrl = spine2_v_vec.c(prestimulus_index,index_end).max()
+  dend_v_peak_ctrl = dend_v_vec.c(prestimulus_index,index_end).max()
+
+  // leave bAP on
+  // 2) bAP + inhib in dend   //////////////////////////////////
+
+  // bAP left on from above, now dend inihib turned back on
+  NC[dend_choice].weight = 0.0004 * dend_inhib_factor // 4e-4 uS = 0.4 nS
+
+  sprint(tmpstr,"bAP%dxdendinhib",dend_inhib_factor)
+  proto_dir=tmpstr
+  // if dend_inhib_factor=1 then proto_dir will be "bAP1xdendinhib"
+  run_model()
+  proto_num=proto_num+1
+
+// baseline B
+  spine0_B_inhib=spine0_cai_vec.x[prestimulus_index]
+  spine1_B_inhib=spine1_cai_vec.x[prestimulus_index]
+  spine2_B_inhib=spine2_cai_vec.x[prestimulus_index]
+  dend_B_inhib=dend_cai_vec.x[prestimulus_index]
+
+  spine0_Ca_peak_inhib = spine0_cai_vec.c(prestimulus_index, index_end).max()
+  spine1_Ca_peak_inhib = spine1_cai_vec.c(prestimulus_index, index_end).max()
+  spine2_Ca_peak_inhib = spine2_cai_vec.c(prestimulus_index, index_end).max()
+  dend_Ca_peak_inhib = dend_cai_vec.c(prestimulus_index, index_end).max()
+
+  spine0_dCa_ratio=(spine0_Ca_peak_inhib-spine0_B_inhib)/(spine0_Ca_peak_ctrl-spine0_B_ctrl)
+  spine1_dCa_ratio=(spine1_Ca_peak_inhib-spine1_B_inhib)/(spine1_Ca_peak_ctrl-spine1_B_ctrl)
+  spine2_dCa_ratio=(spine2_Ca_peak_inhib-spine2_B_inhib)/(spine2_Ca_peak_ctrl-spine2_B_ctrl)
+  dend_dCa_ratio=(dend_Ca_peak_inhib-dend_B_inhib)/(dend_Ca_peak_ctrl-dend_B_ctrl)
+
+  spine0_v_peak_inhib = spine0_v_vec.c(prestimulus_index,index_end).max()
+  spine1_v_peak_inhib = spine1_v_vec.c(prestimulus_index,index_end).max()
+  spine2_v_peak_inhib = spine2_v_vec.c(prestimulus_index,index_end).max()
+  dend_v_peak_inhib = dend_v_vec.c(prestimulus_index,index_end).max()
+
+  print "Na K g's: 1/", denominator, ", dend_inhib_factor = ", dend_inhib_factor
+  print "compartment V_peak_ctrl V_peak_inhib Ca_peak_ctrl Ca_peak_inhib Ca_baseline_ctrl dCa_ctrl dCa_inhib dCa_ratio"
+  print "spine0 ",spine0_v_peak_ctrl,spine0_v_peak_inhib,spine0_Ca_peak_ctrl,spine0_Ca_peak_inhib,spine0_B_ctrl,spine0_Ca_peak_ctrl-spine0_B_ctrl,spine0_Ca_peak_inhib-spine0_B_inhib,spine0_dCa_ratio
+  print "spine1 ",spine1_v_peak_ctrl,spine1_v_peak_inhib,spine1_Ca_peak_ctrl,spine1_Ca_peak_inhib,spine1_B_ctrl,spine1_Ca_peak_ctrl-spine1_B_ctrl,spine1_Ca_peak_inhib-spine1_B_inhib,spine1_dCa_ratio
+  print "spine2 ",spine2_v_peak_ctrl,spine2_v_peak_inhib,spine2_Ca_peak_ctrl,spine2_Ca_peak_inhib,spine2_B_ctrl,spine2_Ca_peak_ctrl-spine2_B_ctrl,spine2_Ca_peak_inhib-spine2_B_inhib,spine2_dCa_ratio
+  print "dend ",dend_v_peak_ctrl,dend_v_peak_inhib,dend_Ca_peak_ctrl,dend_Ca_peak_inhib,dend_B_ctrl,dend_Ca_peak_ctrl-dend_B_ctrl,dend_Ca_peak_inhib-dend_B_inhib,dend_dCa_ratio
+
+// convert below to file writing and then delete above sprints.
+
+  sprint(tmpstr,"NaKgs/statistics_table.txt")
+  f.aopen(tmpstr)
+  sprint(tmpstr, "Na K g's: 1/%d, dend_inhib_factor = %g\n", denominator, dend_inhib_factor)
+  f.printf(tmpstr)
+  sprint(tmpstr,"compartment V_peak_ctrl V_peak_inhib Ca_peak_ctrl Ca_peak_inhib Ca_baseline_ctrl dCa_ctrl dCa_inhib dCa_ratio\n")
+  f.printf(tmpstr)
+  sprint(tmpstr, "spine0 %g %g %g %g %g %g %g %g\n",spine0_v_peak_ctrl,spine0_v_peak_inhib,spine0_Ca_peak_ctrl,spine0_Ca_peak_inhib,spine0_B_ctrl,spine0_Ca_peak_ctrl-spine0_B_ctrl,spine0_Ca_peak_inhib-spine0_B_inhib,spine0_dCa_ratio)
+  f.printf(tmpstr)
+  sprint(tmpstr,"spine1 %g %g %g %g %g %g %g %g\n",spine1_v_peak_ctrl,spine1_v_peak_inhib,spine1_Ca_peak_ctrl,spine1_Ca_peak_inhib,spine1_B_ctrl,spine1_Ca_peak_ctrl-spine1_B_ctrl,spine1_Ca_peak_inhib-spine1_B_inhib,spine1_dCa_ratio)
+  f.printf(tmpstr)
+  sprint(tmpstr, "spine2 %g %g %g %g %g %g %g %g\n",spine2_v_peak_ctrl,spine2_v_peak_inhib,spine2_Ca_peak_ctrl,spine2_Ca_peak_inhib,spine2_B_ctrl,spine2_Ca_peak_ctrl-spine2_B_ctrl,spine2_Ca_peak_inhib-spine2_B_inhib,spine2_dCa_ratio)
+  f.printf(tmpstr)
+  sprint(tmpstr,"dend %g %g %g %g %g %g %g %g\n",dend_v_peak_ctrl,dend_v_peak_inhib,dend_Ca_peak_ctrl,dend_Ca_peak_inhib,dend_B_ctrl,dend_Ca_peak_ctrl-dend_B_ctrl,dend_Ca_peak_inhib-dend_B_inhib,dend_dCa_ratio)
+  f.printf(tmpstr)
+  f.close()
+}

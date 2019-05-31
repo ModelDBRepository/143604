@@ -1,0 +1,162 @@
+// spine_migrator.hoc 
+// moves the spines rather than sealing off the
+// dendrite at various locations as pinch_migrator.hoc did
+//
+// Run twice: with and without inhibition to form
+// dCa_ratio = (Ca_peak_inhib - Baseline)/(Ca_peak_cntrl - Baseline)
+// 
+// store the evolving profile of the bAP max amplitude envelope as the
+// pinched location moves distally graph those in Matlab as a 3-D
+// surface. distr.mod has a "ds" mechanism that needs to be inserted
+// everywhere to find the max voltage
+
+// this program assumes hoc/sealed_end/library.hoc has been loaded (by init.hoc)
+// must cd to top-level folder because starts in hoc/sealed_end when loaded
+// print "the current working directory is"
+// system("pwd")
+chdir("../..")
+
+// Make sure model spines in default state:
+
+// Print spine neck Ra, diam on oc> prompt
+print "Before we change neck diam and Ra in spines_migrator.hoc:"
+forsec "neck" {print secname(),": Ra=",Ra,", diam=",diam}
+forsec "neck" {diam=0.07}
+forsec "neck" {Ra=200}
+
+// *******************************************************************
+// main loop *********************************************************
+// *******************************************************************
+
+// for (spines_location=110.5;spines_location<=300.5; spines_location +=2) {
+for spines_number = 0, dendrite_length_vec.size()-1 {
+  spines_location = dendrite_length_vec.x[spines_number]
+  print "top of loop"
+  move_spines_to_location(spines_location)
+
+  print "Moved distal spine to: ", spines_location
+
+ // xopen("fig1.hoc")
+  setup_recording_vecs()
+  NC[spine_choice].weight = 0.0 // run first with no inhib (ctrl) 4e-4 uS = 0.4 nS
+
+  init()
+  run()
+  // update vectors
+  // calcium
+  Ca_peak_ctrl=head1_cai_vec.max()
+  B_ctrl = head1_cai_vec.x[99.9/dt] // Baseline Ca concentration
+  dCa_ctrl = Ca_peak_ctrl - B_ctrl
+  dCa_ctrl_vec.append(dCa_ctrl)
+  // voltage
+  dendrite for (x,0) {
+    max_bAP_ctrl[spines_number].append(vmax_ds(x))
+  }
+
+  // rerun with inhibition in the middle spine
+  NC[spine_choice].weight = 4e-4 // run with inhib 4e-4 uS = 0.4 nS
+  init()
+  run()
+  // update vectors
+  // calcium
+  Ca_peak_inhib=head1_cai_vec.max()
+  B_inhib = head1_cai_vec.x[99.9/dt] // Baseline Ca concentration
+  dCa_inhib = Ca_peak_inhib - B_inhib
+  dCa_inhib_vec.append(dCa_inhib)
+  // dCa ratio
+  dCa_ratio_vec.append(dCa_inhib/dCa_ctrl)
+  // voltage
+  dendrite for (x,0) {
+    max_bAP_inhib[spines_number].append(vmax_ds(x))
+  }
+
+// in regards to new and old vectors:
+// 1) head0_ca_peak is retained however other data aids its interpretation
+// 2) Can write the dCa_inhib,ctrl,ratio vectors
+// 3) can write the max_bAP_(inhib,ctrl)_X.txt files where
+// X is the spines number
+
+//  print "head 0 peak Ca: ", head0_cai_vec.max(), ", peak v: ", head0_v_vec.max()
+//  print "head 1 peak Ca: ", head1_cai_vec.max(), ", peak v: ", head1_v_vec.max()
+//  print "head 2 peak Ca: ", head2_cai_vec.max(), ", peak v: ", head2_v_vec.max()
+  print "head 0 peak Ca: ", head0_cai_vec.max()
+  print "head 1 peak Ca: ", head1_cai_vec.max()
+  print "head 2 peak Ca: ", head2_cai_vec.max()
+  print "spines location: ", spines_location
+  head0_ca_peak.append(head0_cai_vec.max())
+//  print "head_head0_cai_vec.max(): ", head0_cai_vec.max()
+  head1_ca_peak.append(head1_cai_vec.max())
+//  print "head1_cai_vec.max(): ", head1_cai_vec.max()
+//  head0_v_peak.append(head0_v_vec.max())
+//  print "head0_v_vec.max(): ", head0_v_vec.max()
+//  head1_v_peak.append(head1_v_vec.max())
+//  print "head1_v_vec.max(): ", head1_v_vec.max()
+
+  /* write the calculated vectors
+  
+  max_bAP_ctrl_vec_X.txt
+  max_bAP_inhib_vec_X.txt
+
+  */
+  save1 = max_bAP_ctrl[spines_number].c.where(">", -50) // -50 is arbitrary value used to find where the bAP propagated
+  max_bAP_ctrl[spines_number] = save1
+  save2 = max_bAP_inhib[spines_number].c.where(">", -50) // -50 is arbitrary value used to find where the bAP propagated
+  max_bAP_inhib[spines_number] = save2
+
+  sprint(tmpstr,"sealed_end/spines_move/max_bAP_ctrl_%d",spines_number)
+  write_vec(tmpstr,distance_vec.c(0,save1.size()-1), max_bAP_ctrl[spines_number])
+  sprint(tmpstr,"sealed_end/spines_move/max_bAP_inhib_%d",spines_number)
+  write_vec(tmpstr,distance_vec.c(0,save2.size()-1), max_bAP_inhib[spines_number])
+
+}  // end of loop over (spineloc) length of dendrite
+
+/* write other vectors
+
+distance.txt contains the distance for each corresponding dendrite
+compartment (segment or node) in the above envelope files.
+
+A dendrite_length_vec stores the length of the dendrite for each
+simulation as successive elements.
+
+Spine Ca signal measurements:
+dCa_inhib_vec.txt
+dCa_ctrl_vec.txt
+dCa_ratio_vec.txt
+dendrite_length_vec.txt (associated with above)
+*/
+
+tmpstr="sealed_end/spines_move/distance"
+write_vec(tmpstr,distance_vec, distance_vec)
+tmpstr="sealed_end/spines_move/dCa_inhib_vec"
+write_vec(tmpstr,dendrite_length_vec, dCa_inhib_vec)
+tmpstr="sealed_end/spines_move/dCa_ctrl_vec"
+write_vec(tmpstr,dendrite_length_vec, dCa_ctrl_vec)
+tmpstr="sealed_end/spines_move/dCa_ratio_vec"
+write_vec(tmpstr,dendrite_length_vec, dCa_ratio_vec)
+
+// graphs for a dendrite spineloc off at increasing locations from the
+// spines to study the sealed end (and possibly other effects of being
+// near the end of the dendrite tip)
+objref g_spineloc_ca_peaks, g_spineloc_v_peaks, g_spineloc_ca_ratios
+g_spineloc_ca_peaks= new Graph()
+g_spineloc_v_peaks= new Graph()
+g_spineloc_ca_ratios= new Graph()
+
+head1_ca_peak.c.div(head0_ca_peak).line(g_spineloc_ca_ratios, dendrite_length_vec)
+g_spineloc_ca_ratios.exec_menu("View = plot")
+g_spineloc_ca_ratios.label(.5,.9,"Ca ratios")
+
+head0_ca_peak.line(g_spineloc_ca_peaks,dendrite_length_vec)
+head1_ca_peak.line(g_spineloc_ca_peaks,dendrite_length_vec)
+g_spineloc_ca_peaks.exec_menu("View = plot")
+g_spineloc_ca_peaks.label(.5,.9,"Ca peaks")
+
+//head0_v_peak.line(g_spineloc_v_peaks, dendrite_length_vec)
+//head1_v_peak.line(g_spineloc_v_peaks, dendrite_length_vec)
+//g_spineloc_v_peaks.exec_menu("View = plot")
+//g_spineloc_v_peaks.label(.5,.9,"V peaks")
+
+for i=0, spines_number-1 {
+  max_bAP_ctrl[i].line(g_spineloc_v_peaks,distance_vec)
+  max_bAP_inhib[i].line(g_spineloc_v_peaks,distance_vec,2,5)
+}

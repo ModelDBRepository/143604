@@ -1,0 +1,6 @@
+graph_bAP_envelopes.label(0.185962, 0.944003, "bAP peak (mV)  as function of distance along the dendrite(um) 20121205", 2, 1, 0, 0, 1)
+graph_bAP_envelopes.label(0.226983, 0.554116, "The dendritic inhibition (when it exists) is at 100 um", 2, 1, 0, 0, 1)
+graph_bAP_envelopes.label(0.184139, 0.908901, "These pairs of envelopes are for alternating control (no inhibition) and 5x inhibition", 2, 1, 0, 0, 1)
+graph_bAP_envelopes.label(0.657247, 0.765984, "These two curves generated with default Na K channel density", 2, 1, 0, 0, 1)
+graph_bAP_envelopes.label(0.616226, 0.440033, "Here the NA K density is reduced by 1/2", 2, 1, 0, 0, 1)
+graph_bAP_envelopes.label(0.663628, 0.185541, "Here the Na K chan density is reduced 1/4, 1/8, 1/16", 2, 1, 0, 0, 1)

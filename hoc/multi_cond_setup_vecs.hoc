@@ -1,0 +1,82 @@
+// Multi_cond_setup_vecs.hoc
+// re-initialize and setup record vectors with proc:
+
+proc setup_vectors_to_record() {
+// record voltages in the dendrite and the Spine[X].head X=0,1,2 (corresponds to paper spines 1 2 3)
+  dend_v_vec = new Vector()
+  dend_cai_vec= new Vector()
+
+  spine0_v_vec= new Vector()
+  spine1_v_vec= new Vector()
+  spine2_v_vec= new Vector()
+  spine0_cai_vec = new Vector()
+  spine1_cai_vec = new Vector()
+  spine2_cai_vec = new Vector()
+
+  dend_gabaa_g_vec = new Vector()
+  spine0_gabaa_g_vec = new Vector()
+  spine1_gabaa_g_vec = new Vector()
+  spine2_gabaa_g_vec = new Vector()
+  
+  m_ca_dend_vec = new Vector()
+  h_ca_dend_vec = new Vector()
+  m_ca_spine1_vec = new Vector()
+  h_ca_spine1_vec = new Vector()
+  m_ca_spine0_vec = new Vector()
+  h_ca_spine0_vec = new Vector()
+
+  t_vec = new Vector()
+  t_vec.indgen(0, tstop, dt)
+
+  spinelocation=adjacent_shaft_x_loc // record the dendrite where Spine[1] is attached
+  sprint(tmpstr, "dendrite.v(%f)", adjacent_shaft_x_loc) // used to be 180/dendrite.L
+  dend_v_vec.label(tmpstr)
+  spine0_v_vec.label("Spine[0].head.v(0.5)")
+  spine1_v_vec.label("Spine[1].head.v(0.5)")
+  spine2_v_vec.label("Spine[2].head.v(0.5)")
+
+      sprint(tmpstr, "(dendrite) Exp2Syn[0].g(%f)", adjacent_shaft_x_loc) // used to be 180/dendrite.L
+  dend_gabaa_g_vec.label(tmpstr)
+  spine0_gabaa_g_vec.label("(Spine[0].head) Exp2Syn[1].g")
+  spine1_gabaa_g_vec.label("(Spine[1].head) Exp2Syn[2].g")
+  spine2_gabaa_g_vec.label("(Spine[2].head) Exp2Syn[3].g")
+
+  sprint(tmpstr,"dendrite.cai(%g)", spinelocation) // dend. comp. adj. to spine
+  dend_cai_vec.label(tmpstr)
+  spine0_cai_vec.label("Spine[0].head.cai(0.5)")
+  spine1_cai_vec.label("Spine[1].head.cai(0.5)")
+  spine2_cai_vec.label("Spine[2].head.cai(0.5)")
+
+  sprint(tmpstr,"dendrite.m_ca(%g)", spinelocation) // dend. comp. adj. to spine
+  m_ca_dend_vec.label(tmpstr)
+  sprint(tmpstr,"dendrite.h_ca(%g)", spinelocation) // dend. comp. adj. to spine
+  h_ca_dend_vec.label(tmpstr)
+  m_ca_spine1_vec.label("Spine[1].head.m_ca(0.5)")
+  h_ca_spine1_vec.label("Spine[1].head.h_ca(0.5)")
+  m_ca_spine0_vec.label("Spine[0].head.m_ca(0.5)")
+  h_ca_spine0_vec.label("Spine[0].head.h_ca(0.5)")
+
+  dend_v_vec.record(&dendrite.v(spinelocation), t_vec)
+  dend_gabaa_g_vec.record(&Exp2Syn[0].g, t_vec)
+  dend_cai_vec.record(&dendrite.cai(spinelocation), t_vec)
+
+  spine0_v_vec.record(&Spine[0].head.v(0.5), t_vec)
+  spine1_v_vec.record(&Spine[1].head.v(0.5), t_vec)
+  spine2_v_vec.record(&Spine[2].head.v(0.5), t_vec)
+
+  spine0_gabaa_g_vec.record(&Exp2Syn[1].g, t_vec)
+  spine1_gabaa_g_vec.record(&Exp2Syn[2].g, t_vec)
+  spine2_gabaa_g_vec.record(&Exp2Syn[3].g, t_vec)
+
+  spine0_cai_vec.record(&Spine[0].head.cai(0.5), t_vec)
+  spine1_cai_vec.record(&Spine[1].head.cai(0.5), t_vec)
+  spine2_cai_vec.record(&Spine[2].head.cai(0.5), t_vec)
+
+  m_ca_dend_vec.record(&dendrite.m_ca(spinelocation), t_vec)
+  h_ca_dend_vec.record(&dendrite.h_ca(spinelocation), t_vec)
+  m_ca_spine1_vec.record(&Spine[1].head.m_ca(0.5), t_vec)
+  h_ca_spine1_vec.record(&Spine[1].head.h_ca(0.5), t_vec)
+  m_ca_spine0_vec.record(&Spine[0].head.m_ca(0.5), t_vec)
+  h_ca_spine0_vec.record(&Spine[0].head.h_ca(0.5), t_vec)
+}
+

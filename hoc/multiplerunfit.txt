@@ -1,0 +1,31 @@
+Tools -> MulRunFitter
+Generators -> Add Fitness Primitive
+Fitness -> Expression
+ratio_fitness()
+
+Generators -> Use Generator
+(double click on unnamed Fitness Primitive)
+
+Generators  -> Change Name
+(double click on unnamed Fitenss Primitive)
+Type in "Ratio Fitness"
+
+Parameter -> Add parameter -> global_cm
+Parameter -> Add parameter -> global_Ra
+Parameter -> Add parameter -> global_g_pas
+
+Domain panel -> make logarithmic
+ make limits "1 0.75 1e02"
+etc.  choose alternating intervals between optimizations and only select one parameter at a time to optimize to
+some percentage (10, or 25%) 
+
+
+
+---------------
+
+For optimizing to see if can find Ca channel density in spine with
+dendritic inhibition try to see if can get Spine1_dCa_ratio near 75
+and Spine0_dCa_ratio near 95.  This is meant to be representative of
+inhibition in one spine but not another adjacent one:
+
+error = (Spine1_dCa_ratio-75)^2 + (Spine0_dCa_ratio-95)^2

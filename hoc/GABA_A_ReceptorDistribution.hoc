@@ -1,0 +1,34 @@
+// GABA_A_ReceptorDistribution.hoc
+// distribute GABA_A receptors throughout the dendrite and spines
+// then control their "presence" though setting the weight to zero/nonzero
+/* rely instead on the hoc/insert_synapses.hoc for the
+netstim declaration
+
+objref gabaa_syn
+Spine[0].head gabaa_syn=new Exp2SynSat(0.5)
+gabaa_syn.tau1=1
+gabaa_syn.tau2=15
+gabaa_syn.e=-70
+gabaa_syn.saturation=0.0004
+
+objref ns, nc
+ns = new NetStim()
+// statements that specify the firing properties of ns
+ns.interval= 10
+ns.start=100
+ns.number=0 // 10 // add some gabaa synaptic events
+ns.noise=0
+*/
+xpanel("NetStim[0] control")
+  xvalue("NetStim[0].start")
+  xvalue("NetStim[0].number")
+  xvalue("NetStim[0].interval")
+  xvalue("NetStim[0].noise")
+
+xpanel()
+
+/*
+nc = new NetCon(ns, gabaa_syn)
+// statements that specify the weight and latency of nc
+nc.weight=0.0004
+*/

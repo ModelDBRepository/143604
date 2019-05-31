@@ -1,0 +1,343 @@
+// optimization_dend_inhib.hoc
+/*
+
+This file will run  simulations to search for Ca channel
+density gbar_ca in a spine head (a heterogenity when compared with the
+adjacent spine heads) that will produce 10% inhibition in that spine
+head given only dendritic inhibition of a bAP, thereby addressing
+Reviewer 2's point number 1.
+
+Basic design of this program is to determine various starting
+parameters including starting with various levels of fixed dendritic
+inhibition as a multiple of the inhibition we typically used in the
+spine (multiples of 0.4 nS).  These multiples then supply 5x, 10x,
+15x, 20x, 25x, 30x inhibition to the dendrite.  These are supplied in
+a parameter called dendrite_inhibition_factor.  The results of the
+simulations are written to files in results//ca_hetero/5x.txt,
+10x.txt, 15x.txt etc...
+
+The program runs by distributing various jobs to processes.  Each
+optimization writes its output file to a seperate filename (5x.txt,
+10x.txt, ...).
+
+When the program start it loops over the dendrite_inhibition_factor
+and calling a seperate instance of the MulRunFitter and praxis for
+that parameter value.  When the optimizer returns the output file is
+closed and the simulation exits.
+
+Parameters that were modified for faster run times: The bAP was
+started at MultIClamp[0].del = 115 ms to match experiment.  This was
+moved up to 35 ms (with less that 0.08% change in membrane voltage).
+The synaptic stimulation which was previously at ns.start=100 then
+needs to be moved up to ns.start = 20 ms.  Similarly variables that
+use to check the pre-inhibition Ca levels at 99.9 ms need to have
+their times and indexes move up to correspond with the time 19.9 ms.
+*/
+
+proc move_stimulus_back() {
+  MultIClamp[0].del = 115
+  ns.start = 100
+  prestimulus_time=99.9
+  prestimulus_index = prestimulus_time/dt - 1
+  tstop = 500
+}
+proc move_stimulus_up() {
+  MultIClamp[0].del = 35
+  ns.start = 20
+  prestimulus_time=19.9
+  prestimulus_index = prestimulus_time/dt - 1
+  tstop = 150
+}
+move_stimulus_up()
+
+/* to facilitate calculations of Ca signals record all the Ca values
+for each run:
+
+spine0_cai_vec
+spine1_cai_vec
+spine2_cai_vec
+dend_cai_vec
+spine0_v_vec
+spine1_v_vec
+spine2_v_vec
+dend_v_vec
+
+then have buttons
+
+cai_vecs_to_dCa_ctrl
+cai_vecs_to_dCa_inhib
+calculate_dCa_ratio
+
+to press that moves analyzes the vectorsto set the scalars dCa_ctrl or
+dCa_inhib from the spineX_cai and dend_cai vecs.
+
+Pressing calculate_dCa_ratio uses the dCa_inhib/dCa_ctrl to calculate
+dCa_ratio.
+
+*/
+objref spine0_cai_vec,spine1_cai_vec,spine2_cai_vec,dend_cai_vec
+objref spine0_v_vec,spine1_v_vec,spine2_v_vec,dend_v_vec
+spine0_cai_vec=new Vector()
+spine1_cai_vec=new Vector()
+spine2_cai_vec=new Vector()
+dend_cai_vec=new Vector()
+spine0_v_vec=new Vector()
+spine1_v_vec=new Vector()
+spine2_v_vec=new Vector()
+dend_v_vec=new Vector()
+
+proc setup_vectors_() {
+  spine0_cai_vec=new Vector()
+  spine1_cai_vec=new Vector()
+  spine2_cai_vec=new Vector()
+  dend_cai_vec=new Vector()
+  spine0_v_vec=new Vector()
+  spine1_v_vec=new Vector()
+  spine2_v_vec=new Vector()
+  dend_v_vec=new Vector()
+  spine0_cai_vec.record(&Spine[0].head.cai(0.5))
+  spine1_cai_vec.record(&Spine[1].head.cai(0.5))
+  spine2_cai_vec.record(&Spine[2].head.cai(0.5))
+  dend_cai_vec.record(&dendrite.cai(0.16666667))
+  spine0_v_vec.record(&Spine[0].head.v(0.5))
+  spine1_v_vec.record(&Spine[1].head.v(0.5))
+  spine2_v_vec.record(&Spine[2].head.v(0.5))
+  dend_v_vec.record(&dendrite.v(0.16666667))
+}
+
+proc cai_vecs_to_dCa_ctrl() {
+  prestimulus_index=prestimulus_time/dt // 1998, the 1999th element for dt=.05
+
+  index_end = (prestimulus_time+50)/dt // might be 3000 (dt=0.05) or 6000 (dt=0.025) to find
+                     // an index after the first AP but hopefully before
+                     // the second if another AP should occur
+  // baseline B
+  spine0_B_ctrl=spine0_cai_vec.x[prestimulus_index]
+  spine1_B_ctrl=spine1_cai_vec.x[prestimulus_index]
+  spine2_B_ctrl=spine2_cai_vec.x[prestimulus_index]
+  dend_B_ctrl=dend_cai_vec.x[prestimulus_index]
+
+  spine0_Ca_peak_ctrl = spine0_cai_vec.c(prestimulus_index,index_end).max()
+  spine1_Ca_peak_ctrl = spine1_cai_vec.c(prestimulus_index,index_end).max()
+  spine2_Ca_peak_ctrl = spine2_cai_vec.c(prestimulus_index,index_end).max()
+  dend_Ca_peak_ctrl = dend_cai_vec.c(prestimulus_index,index_end).max()
+
+  spine0_v_peak_ctrl = spine0_v_vec.c(prestimulus_index,index_end).max()
+  spine1_v_peak_ctrl = spine1_v_vec.c(prestimulus_index,index_end).max()
+  spine2_v_peak_ctrl = spine2_v_vec.c(prestimulus_index,index_end).max()
+  dend_v_peak_ctrl = dend_v_vec.c(prestimulus_index,index_end).max()
+
+  Ca_peak_ctrl = spine1_Ca_peak_ctrl // Ca_peak_ctrl by default refers to Spine[1]
+}
+proc cai_vecs_to_dCa_inhib() {
+  prestimulus_index=prestimulus_time/dt // 1998, the 1999th element for dt=.05
+
+  index_end = (prestimulus_time+50)/dt // might be 3000 (dt=0.05) or 6000 (dt=0.025) to find
+                     // an index after the first AP but hopefully before
+                     // the second if another AP should occur
+  // baseline B
+  spine0_B_inhib=spine0_cai_vec.x[prestimulus_index]
+  spine1_B_inhib=spine1_cai_vec.x[prestimulus_index]
+  spine2_B_inhib=spine2_cai_vec.x[prestimulus_index]
+  dend_B_inhib=dend_cai_vec.x[prestimulus_index]
+
+  spine0_Ca_peak_inhib = spine0_cai_vec.c(prestimulus_index,index_end).max()
+  spine1_Ca_peak_inhib = spine1_cai_vec.c(prestimulus_index,index_end).max()
+  spine2_Ca_peak_inhib = spine2_cai_vec.c(prestimulus_index,index_end).max()
+  dend_Ca_peak_inhib = dend_cai_vec.c(prestimulus_index,index_end).max()
+
+  spine0_v_peak_inhib = spine0_v_vec.c(prestimulus_index,index_end).max()
+  spine1_v_peak_inhib = spine1_v_vec.c(prestimulus_index,index_end).max()
+  spine2_v_peak_inhib = spine2_v_vec.c(prestimulus_index,index_end).max()
+  dend_v_peak_inhib = dend_v_vec.c(prestimulus_index,index_end).max()
+
+  Ca_peak_inhib = spine1_Ca_peak_inhib // Ca_peak_inhib by default refers to Spine[1]
+}
+proc calculate_dCa_ratio() {
+  spine0_dCa_ratio=(spine0_Ca_peak_inhib-spine0_B_inhib)/(spine0_Ca_peak_ctrl-spine0_B_ctrl)
+  spine1_dCa_ratio=(spine1_Ca_peak_inhib-spine1_B_inhib)/(spine1_Ca_peak_ctrl-spine1_B_ctrl)
+  spine2_dCa_ratio=(spine2_Ca_peak_inhib-spine2_B_inhib)/(spine2_Ca_peak_ctrl-spine2_B_ctrl)
+  dend_dCa_ratio=(dend_Ca_peak_inhib-dend_B_inhib)/(dend_Ca_peak_ctrl-dend_B_ctrl)
+
+  dCa_ratio = spine1_dCa_ratio // the default
+}
+
+// initialize variables to 0
+spine0_B_inhib = 0
+spine1_B_inhib = 0
+spine2_B_inhib = 0
+dend_B_inhib = 0
+spine0_Ca_peak_inhib = 0
+spine1_Ca_peak_inhib = 0
+spine2_Ca_peak_inhib = 0
+dend_Ca_peak_inhib = 0
+spine0_B_ctrl = 0
+spine1_B_ctrl = 0
+spine2_B_ctrl = 0
+dend_B_ctrl = 0
+
+spine0_Ca_peak_ctrl = 0
+spine1_Ca_peak_ctrl = 0
+spine2_Ca_peak_ctrl = 0
+dend_Ca_peak_ctrl = 0
+spine0_dCa_ratio = 0
+spine1_dCa_ratio = 0
+spine2_dCa_ratio = 0
+dend_dCa_ratio = 0
+
+dCa_ratio = 0
+
+proc inhib_off() { local i
+  for i=0, 3 {
+    NC[i].weight = 0
+  }
+}
+calcium_conductance_factor=1
+dendritic_inhibition_factor=5
+proc print_ratios() {
+  print "For dendritic inhibition factor=",dendritic_inhibition_factor," max conductance=",0.0004*dendritic_inhibition_factor,":"
+  print "currently Spine[1].head.gbar_ca(0.5) = ",Spine[1].head.gbar_ca(0.5)/0.032326,"x = ",Spine[1].head.gbar_ca(0.5)," pS/um^2"
+  print "calcium_conductance_factor = ",calcium_conductance_factor," spine1 diam=",Spine[1].neck.diam
+  print "spine0_dCa_ratio=",spine0_dCa_ratio,", spine1_dCa_ratio=",spine1_dCa_ratio,", spine2_dCa_ratio=",spine2_dCa_ratio,", dend_dCa_ratio=",dend_dCa_ratio
+  print " "
+}
+
+spine1_neck_diam = 0.07 // start out with model default
+
+// Below provides dendritic inhibition (paired with bAP) to compare
+// against no inhibition (bAP alone).  It assumes that bAP is turned
+// on prior.
+
+proc multi_dend_run() {
+
+  // first run an inhibitory case that we set up with potential
+  // optimization parameters:
+
+  NC[0].weight = dendritic_inhibition_factor*0.0004
+  Spine[1].head.gbar_ca=calcium_conductance_factor* 0.032326 // default value in pS/um^2
+  Spine[1].neck diam = spine1_neck_diam
+  // setup recording vectors:
+  setup_vectors_()
+  init()
+  run()
+  cai_vecs_to_dCa_inhib()
+
+  // run a ctrl case (no inhibition)
+  inhib_off() 
+  setup_vectors_()
+  init()
+  run()
+  cai_vecs_to_dCa_ctrl()
+
+  calculate_dCa_ratio()
+  print_ratios()
+}
+
+// this provides spine inhibition (paired with bAP) to compare against
+// no inhibition (bAP alone)
+
+proc multi_spine_run() {
+
+  // first run an inhibitory case that we set up with potential
+  // optimization parameters:
+
+  // 0=dend, 1=spine0, 2=spine1, 3=spine2
+  NC[2].weight = 0.0004
+  Spine[1].head.gbar_ca=calcium_conductance_factor* 0.032326 // default value in pS/um^2
+  Spine[1].neck diam = spine1_neck_diam
+  // setup recording vectors:
+  setup_vectors_()
+  init()
+  run()
+  cai_vecs_to_dCa_inhib()
+
+  // run a ctrl case (no inhibition)
+  inhib_off() 
+  setup_vectors_()
+  init()
+  run()
+  cai_vecs_to_dCa_ctrl()
+
+  calculate_dCa_ratio()
+  print_ratios()
+}
+
+xpanel("dCa_ratio")
+  xbutton("Run with vector records","{setup_vectors_() init() run()}")
+  xbutton("Run twice for dCa_ratio (dend inhib off on 2nd run)","{ multi_dend_run() }")
+  xbutton("print ratio values","print_ratios()")
+  xbutton("Run brute force range calc.","load_file(\"hoc/optimization/parameter_ranges.hoc\")")
+  xvalue("dendritic_inhibition_factor")
+  xvalue("calcium_conductance_factor")
+  xvalue("Spine[1].neck.diam(0.5)")
+  xvalue("spine1_neck_diam")
+  xbutton("Spine1 inhib, Spine2 not, optimizer","load_file(\"hoc/mulRunFit_s1_inhib_s0_not.ses\")")
+  xbutton("Dendritic inhibition optimizer","load_file(\"hoc/mulRunFitDendInhib.ses\")")
+  xbutton("calculate dCa_ctrl from recorded vectors","cai_vecs_to_dCa_ctrl()")
+  xbutton("calculate dCa_inhib from recorded vectors","cai_vecs_to_dCa_inhib()")
+  xbutton("calculate dCa_ratio from dCa_inhib/dCa_ctrl","calculate_dCa_ratio()")
+  xvalue("spine0_B_inhib")
+  xvalue("spine1_B_inhib")
+  xvalue("spine2_B_inhib")
+  xvalue("dend_B_inhib")
+  xvalue(" spine0_Ca_peak_inhib")
+  xvalue("spine1_Ca_peak_inhib")
+  xvalue("spine2_Ca_peak_inhib")
+  xvalue("dend_Ca_peak_inhib")
+  xvalue("spine0_B_ctrl")
+  xvalue("spine1_B_ctrl")
+  xvalue("spine2_B_ctrl")
+  xvalue("dend_B_ctrl")
+
+  xvalue("spine0_Ca_peak_ctrl ")
+  xvalue("spine1_Ca_peak_ctrl ")
+  xvalue("spine2_Ca_peak_ctrl ")
+  xvalue("dend_Ca_peak_ctrl ")
+  xvalue("spine0_dCa_ratio")
+  xvalue("spine1_dCa_ratio")
+  xvalue("spine2_dCa_ratio")
+  xvalue("dend_dCa_ratio")
+  xvalue("dCa_ratio ")
+xpanel()
+
+
+func theta() {
+  if ($1>0) { return $1 }
+  return 0
+}
+
+// note that in below "error" refers to a difference from a goal
+// rather than any other type of error.  The goals are fractions of
+// inhibition as measured in Ca signals under two different conditions
+
+func s1_inhib_s0_not_error() { local error
+  // first run the model twice as to generate all dCa_ratios
+  multi_dend_run()
+  // second return an error function representative of trying to get
+  // Spine1 (looking like its) inhibited to under 80% and Spine0 (looking
+  // like) its inhibited to above 90%.  We say (looking like) because
+  // the inhibition is comming from a combination of dendritic inhibition
+  // and some other source such as Ca channel distribution or spine 
+  // neck resistance (diameter changes in our model) differences between
+  // the spines.
+  // orig error = (spine1_dCa_ratio-0.75)^2 + (spine0_dCa_ratio-0.95)^2 
+  error = (spine1_dCa_ratio-0.58)^2 + (spine0_dCa_ratio-0.82)^2 
+  print "s1_inhib_s0_not_error=",error
+  return error
+}
+func dend_inhib_error() { local error
+  // first run the model twice as to generate all dCa_ratios
+  multi_dend_run()
+  // second return an error function representative of trying to get
+  // Spine1 (looking like its) inhibited to under 80% and Spine0 (looking
+  // like) its inhibited to above 90%.  We say (looking like) because
+  // the inhibition is comming from a combination of dendritic inhibition
+  // and some other source such as Ca channel distribution or spine 
+  // neck resistance (diameter changes in our model) differences between
+  // the spines.
+  // orig error = (spine1_dCa_ratio-0.75)^2 + (spine0_dCa_ratio-0.95)^2 
+  // from paper draft: error = (spine1_dCa_ratio-0.58)^2 + (spine0_dCa_ratio-0.82)^2
+  error = (dend_dCa_ratio-0.85)^2 
+  print "dend_inhib_error() = (dend_dCa_ratio-0.85)^2=",error
+  return error
+}

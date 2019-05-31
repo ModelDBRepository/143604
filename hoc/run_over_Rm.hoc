@@ -1,0 +1,13 @@
+// run_over_Rm.hoc
+
+objref Rm_vec
+Rm_vec=new Vector()
+Rm_vec.append(4000,10000,20000,40000)
+
+proc run_over_Rm() {
+  for i=0,Rm_vec.size()-1 {
+    forall {g_pas=1/Rm_vec.x[i]}
+    init()
+    run()
+  }
+}

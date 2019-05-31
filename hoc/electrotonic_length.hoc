@@ -1,0 +1,32 @@
+// electrotonic_length.hoc
+// measures the electrotonic length of V given synaptic conductances
+// either in the spine head or on the dendritic shaft
+
+// General goals
+// play conductance waveforms into the "passive" synapse to study
+// the electrotonic length of synaptic inhibition under the conditions 
+// 1) Synaptic Inhibition (SI) (vs only the leak current)
+// 2) SI with a bAP
+// 3) SI with Synaptic Excitation (SE)
+// 4) SI with both bAP and SE
+//
+
+
+//************************
+// Inhibitory conductance section
+// 1) SI with only the leak current
+// the passive setup
+// Assume a rat RS prefrontal cortical pyramidal neuron has a surface
+// area of 1500 um^2 (estimated from Degenetais E et al. 2002) and
+// an input resistance of 35 MOhms then the conductance in S/cm2 is
+
+// 1500 micron squared =1.5e-5 centimeter squared
+
+// a constant to set the leak current conductance g_pas to throughout
+// a pre-frontal cortex pyy cell (Degenetais et al 2002).
+g_pas_pfc= 1/(35e6*1.5e-5) // 0.0019 S/cm2
+
+forall { g_pas = g_pas_pfc  e_pas = -65 }
+
+// the -65 was the default however we set it here anyway to show that
+// this is the place to change it

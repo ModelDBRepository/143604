@@ -1,0 +1,13 @@
+Explanation of these folders:
+
+./bAPdecay/ ./matlab/ ./pas_dend/ ./pinch_moves/ ./spines_move/ 
+
+The pinch_moves is the default model with the method of the lengthening the dendrite from the distal spine
+to the original length of 600 um.  All the other folders keep the dendrite a fixed length and
+move the 3 spines along the dendrite.
+
+The spines_move folder is done with the default spine model, and the bAPdecay and pas_dend hold
+the results with models that contain half the na k (bAPdecay) and with zero na k channels in the
+dendrite (pas_dend).
+
+In each folder the model is run twice with 

@@ -1,0 +1,1 @@
+zip -r multiconditions_current_based_synapses.zip ./multiconditions/bAPinhibspine ./multiconditions/spineinhibEClm40 ./multiconditions/bAP1xinhibdend ./multiconditions/bAP ./multiconditions/bAP10xinhibdend ./multiconditions/10xinhibdend ./multiconditions/1xinhibdend

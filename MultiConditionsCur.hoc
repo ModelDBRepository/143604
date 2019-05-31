@@ -1,0 +1,335 @@
+// MultiConditionsCur.hoc
+// derived from FiveConditions.hoc
+/*
+1. generate the vm traces for spines 1, 2, and 3 and the dend shaft (4 traces)
+under 
+
+1) inhibition in the spine
+2) 10x inhibition in the dend
+3) bAP
+4) bAP + inhib in spine
+5) bAP + (10x) inhib in dend
+6) (5s) a) supplemental: bAP + (1x) inhibition in the dend
+7)   b) supplemental: (1x) inhibition in the dend
+
+The calcium and voltage trace files are stored in "proto_dir/file" 
+where protocol directory proto_dir is 
+
+inhibspine, 10xinhibdend, bAP, bAPinhibspine, bAP10xinhibdend, bAP1xinhibdend, 1xinhibdend
+
+and file is spine0_ca, spine1_ca, spine2_ca, dend_ca, spine0_v,
+spine1_v, spine2, dend_v
+*/
+strdef proto_dir
+strdef filename
+
+objref dend_v_vec, spine0_v_vec, spine1_v_vec, spine2_v_vec
+objref dend_gabaa_g_vec, spine0_gabaa_g_vec, spine1_gabaa_g_vec, spine2_gabaa_g_vec
+objref dend_cai_vec, spine0_cai_vec, spine1_cai_vec, spine2_cai_vec
+//tstop= 1 // test condition
+// below are graphs (the multi conditions turned into 7 with the addition
+// of protocol bAP + 1x inhibition in dendrite,  1x inhibition in dendrite
+// (without bAP)
+num_of_conditions = 8
+objref  multicond_v[num_of_conditions], multicond_ca[num_of_conditions], multicond_gates[num_of_conditions]
+objref multicond_gabaa_g[num_of_conditions]
+// add the activation and inactivation curves for the ca chan in spines and dend
+objref m_ca_dend_vec, h_ca_dend_vec, m_ca_spine1_vec, h_ca_spine1_vec
+objref  m_ca_spine0_vec, h_ca_spine0_vec
+
+for i=0, num_of_conditions-1 {
+  multicond_v[i] = new Graph()
+  multicond_ca[i] = new Graph()
+  multicond_gates[i] = new Graph()
+  multicond_gabaa_g[i] = new Graph()
+}
+proto_num=0  // index into above graphs of protocol results
+
+proc setup_vectors_to_record() {
+// record voltages in the dendrite and the Spine[X].head X=0,1,2 (corresponds to paper spines 1 2 3)
+  dend_v_vec = new Vector()
+  dend_cai_vec= new Vector()
+
+  spine0_v_vec= new Vector()
+  spine1_v_vec= new Vector()
+  spine2_v_vec= new Vector()
+  spine0_cai_vec = new Vector()
+  spine1_cai_vec = new Vector()
+  spine2_cai_vec = new Vector()
+
+  dend_gabaa_g_vec = new Vector()
+  spine0_gabaa_g_vec = new Vector()
+  spine1_gabaa_g_vec = new Vector()
+  spine2_gabaa_g_vec = new Vector()
+  
+  m_ca_dend_vec = new Vector()
+  h_ca_dend_vec = new Vector()
+  m_ca_spine1_vec = new Vector()
+  h_ca_spine1_vec = new Vector()
+  m_ca_spine0_vec = new Vector()
+  h_ca_spine0_vec = new Vector()
+
+  t_vec = new Vector()
+  t_vec.indgen(0, tstop, dt)
+
+  spinelocation=adjacent_shaft_x_loc // record the dendrite where Spine[1] is attached
+  sprint(tmpstr, "dendrite.v(%f)", adjacent_shaft_x_loc) // used to be 180/dendrite.L
+  dend_v_vec.label(tmpstr)
+  spine0_v_vec.label("Spine[0].head.v(0.5)")
+  spine1_v_vec.label("Spine[1].head.v(0.5)")
+  spine2_v_vec.label("Spine[2].head.v(0.5)")
+
+      sprint(tmpstr, "(dendrite) Exp2SynCur[0].g(%f)", adjacent_shaft_x_loc) // used to be 180/dendrite.L
+  dend_gabaa_g_vec.label(tmpstr)
+  spine0_gabaa_g_vec.label("(Spine[0].head) Exp2SynCur[1].g")
+  spine1_gabaa_g_vec.label("(Spine[1].head) Exp2SynCur[2].g")
+  spine2_gabaa_g_vec.label("(Spine[2].head) Exp2SynCur[3].g")
+
+  sprint(tmpstr,"dendrite.cai(%g)", spinelocation) // dend. comp. adj. to spine
+  dend_cai_vec.label(tmpstr)
+  spine0_cai_vec.label("Spine[0].head.cai(0.5)")
+  spine1_cai_vec.label("Spine[1].head.cai(0.5)")
+  spine2_cai_vec.label("Spine[2].head.cai(0.5)")
+
+  sprint(tmpstr,"dendrite.m_ca(%g)", spinelocation) // dend. comp. adj. to spine
+  m_ca_dend_vec.label(tmpstr)
+  sprint(tmpstr,"dendrite.h_ca(%g)", spinelocation) // dend. comp. adj. to spine
+  h_ca_dend_vec.label(tmpstr)
+  m_ca_spine1_vec.label("Spine[1].head.m_ca(0.5)")
+  h_ca_spine1_vec.label("Spine[1].head.h_ca(0.5)")
+  m_ca_spine0_vec.label("Spine[0].head.m_ca(0.5)")
+  h_ca_spine0_vec.label("Spine[0].head.h_ca(0.5)")
+
+  dend_v_vec.record(&dendrite.v(spinelocation), t_vec)
+  dend_gabaa_g_vec.record(&Exp2SynCur[0].g, t_vec)
+  dend_cai_vec.record(&dendrite.cai(spinelocation), t_vec)
+
+  spine0_v_vec.record(&Spine[0].head.v(0.5), t_vec)
+  spine1_v_vec.record(&Spine[1].head.v(0.5), t_vec)
+  spine2_v_vec.record(&Spine[2].head.v(0.5), t_vec)
+
+  spine0_gabaa_g_vec.record(&Exp2SynCur[1].g, t_vec)
+  spine1_gabaa_g_vec.record(&Exp2SynCur[2].g, t_vec)
+  spine2_gabaa_g_vec.record(&Exp2SynCur[3].g, t_vec)
+
+  spine0_cai_vec.record(&Spine[0].head.cai(0.5), t_vec)
+  spine1_cai_vec.record(&Spine[1].head.cai(0.5), t_vec)
+  spine2_cai_vec.record(&Spine[2].head.cai(0.5), t_vec)
+
+  m_ca_dend_vec.record(&dendrite.m_ca(spinelocation), t_vec)
+  h_ca_dend_vec.record(&dendrite.h_ca(spinelocation), t_vec)
+  m_ca_spine1_vec.record(&Spine[1].head.m_ca(0.5), t_vec)
+  h_ca_spine1_vec.record(&Spine[1].head.h_ca(0.5), t_vec)
+  m_ca_spine0_vec.record(&Spine[0].head.m_ca(0.5), t_vec)
+  h_ca_spine0_vec.record(&Spine[0].head.h_ca(0.5), t_vec)
+}
+
+proc  write_vectors() {
+  sprint(tmpstr,"multiconditions/%s/spine0_cai.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, spine0_cai_vec)
+  sprint(tmpstr,"multiconditions/%s/spine1_cai.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, spine1_cai_vec)
+  sprint(tmpstr,"multiconditions/%s/spine2_cai.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, spine2_cai_vec)
+  
+  sprint(tmpstr,"multiconditions/%s/spine0_v.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, spine0_v_vec)
+  sprint(tmpstr,"multiconditions/%s/spine1_v.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, spine1_v_vec)
+  sprint(tmpstr,"multiconditions/%s/spine2_v.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, spine2_v_vec)
+  
+  sprint(tmpstr,"multiconditions/%s/spine0_gabaa_g.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, spine0_gabaa_g_vec)
+  sprint(tmpstr,"multiconditions/%s/spine1_gabaa_g.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, spine1_gabaa_g_vec)
+  sprint(tmpstr,"multiconditions/%s/spine2_gabaa_g.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, spine2_gabaa_g_vec)
+  
+  sprint(tmpstr,"multiconditions/%s/dend_v.dat" , proto_dir)
+  write_vec(tmpstr,t_vec,dend_v_vec)
+  sprint(tmpstr,"multiconditions/%s/dend_gabaa_g.dat" , proto_dir)
+  write_vec(tmpstr,t_vec,dend_gabaa_g_vec)
+  sprint(tmpstr,"multiconditions/%s/dend_cai.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, dend_cai_vec)
+
+  sprint(tmpstr,"multiconditions/%s/m_ca_dend_vec.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, m_ca_dend_vec)
+  
+  sprint(tmpstr,"multiconditions/%s/h_ca_dend_vec.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, h_ca_dend_vec)
+
+  sprint(tmpstr,"multiconditions/%s/m_ca_spine1_vec.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, m_ca_spine1_vec)
+
+  sprint(tmpstr,"multiconditions/%s/h_ca_spine1_vec.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, h_ca_spine1_vec)
+
+  sprint(tmpstr,"multiconditions/%s/m_ca_spine0_vec.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, m_ca_spine0_vec)
+
+  sprint(tmpstr,"multiconditions/%s/h_ca_spine0_vec.dat" , proto_dir)
+  write_vec(tmpstr,t_vec, h_ca_spine0_vec)
+
+  // graphs
+  // ca
+  spine0_cai_vec.line(multicond_ca[proto_num],t_vec,3,1)
+  spine1_cai_vec.line(multicond_ca[proto_num],t_vec,1,1)
+  spine2_cai_vec.line(multicond_ca[proto_num],t_vec,2,1)
+  dend_cai_vec.line(multicond_ca[proto_num],t_vec,5,1)
+
+  multicond_ca[proto_num].exec_menu("View = plot")
+  sprint(tmpstr,"multi conditions: cai under protocol %s" , proto_dir)
+  multicond_ca[proto_num].label(.05,.05,tmpstr)
+  multicond_ca[proto_num].view(0, 0, 500 , 0.0011, 180, 280, 300, 200)
+
+  // gabaa_g
+  spine0_gabaa_g_vec.line(multicond_gabaa_g[proto_num],t_vec,3,1)
+  spine1_gabaa_g_vec.line(multicond_gabaa_g[proto_num],t_vec,1,1)
+  spine2_gabaa_g_vec.line(multicond_gabaa_g[proto_num],t_vec,2,1)
+  dend_gabaa_g_vec.line(multicond_gabaa_g[proto_num],t_vec,5,1)
+  multicond_gabaa_g[proto_num].exec_menu("View = plot")
+
+  sprint(tmpstr,"multi conditions: gabaa_g under protocol %s" , proto_dir)
+  multicond_gabaa_g[proto_num].label(.05,.05,tmpstr)
+  multicond_gabaa_g[proto_num].view(114, -70, 6 , 78, 200, 300, 300, 200)
+
+  // v
+  spine0_v_vec.line(multicond_v[proto_num],t_vec,3,1)
+  spine1_v_vec.line(multicond_v[proto_num],t_vec,1,1)
+  spine2_v_vec.line(multicond_v[proto_num],t_vec,2,1)
+  dend_v_vec.line(multicond_v[proto_num],t_vec,5,1)
+  multicond_v[proto_num].exec_menu("View = plot")
+
+  sprint(tmpstr,"multi conditions: v under protocol %s" , proto_dir)
+  multicond_v[proto_num].label(.05,.05,tmpstr)
+  multicond_v[proto_num].view(114, -70, 6 , 78, 200, 300, 300, 200)
+
+  // ca gates
+  m_ca_spine0_vec.line(multicond_gates[proto_num], t_vec,1, 1)
+  h_ca_spine0_vec.line(multicond_gates[proto_num], t_vec,2, 1)
+  m_ca_spine1_vec.line(multicond_gates[proto_num], t_vec,3, 1)
+  h_ca_spine1_vec.line(multicond_gates[proto_num], t_vec,4, 1)
+  m_ca_dend_vec.line(multicond_gates[proto_num], t_vec,5, 1)
+  h_ca_dend_vec.line(multicond_gates[proto_num], t_vec,6, 1)
+  multicond_gates[proto_num].exec_menu("View = plot")
+  sprint(tmpstr,"multi conditions: m_ca, h_ca under protocol %s" , proto_dir)
+  multicond_gates[proto_num].label(.05,.05,tmpstr)
+}
+
+proc run_model() {
+  print "model running with protocol ", proto_dir
+  setup_vectors_to_record()
+  init()
+  run()
+  write_vectors()
+}
+print "Starting Multiple conditions with current based inhibitory synapses."
+// Start of top-level script to run model with (roughly) Multi Conditions
+// I say roughly because a 6+7th condition of "bAP + 1x inhib in dend",
+// and "1x inhib in dend" were added
+// first switch to semi-high (0.05 is high) neck resistance state:
+forsec "neck" {diam=0.07}
+forsec "neck" {Ra=200}
+// the NCcur[] index is defined: 0=dend, 1, 2, 3 is Spine[0, 1, 2]
+
+// 1) inhibition in the spine //////////////////////////////////
+// turn on spine inhibition, turn off bAP
+NCcur[spine_choice].weight = 0.0004 // 4e-4 uS = 0.4 nS
+MultIClamp[0].number=0 // turn off current injection that creates bAP
+
+proto_dir="inhibspine"
+proto_num=0
+run_model()
+
+// turn off spine inhibition
+NCcur[spine_choice].weight = 0.0
+
+// 2) inhibition in the dend //////////////////////////////////
+
+// turn on dend inhibition, leave bAP off
+// turn on conductance in the adjacent dendrite at the location of Spine[1] (used to be [2] at 181/L)
+// at 10 times the conductance
+NCcur[0].weight = 0.004 // 4 nS
+
+proto_dir="10xinhibdend"
+proto_num=1
+run_model()
+
+// turn off dend inhibition
+NCcur[0].weight = 0.0
+
+// 3) bAP                    //////////////////////////////////
+
+// turn on bAP
+MultIClamp[0].number=1 // turn on current injection that creates bAP
+
+proto_dir="bAP"
+proto_num=2
+run_model()
+
+// leave bAP on
+
+// 4) bAP + inhib in spine   //////////////////////////////////
+
+// bAP left on from above, now spine inihib turned back on
+NCcur[spine_choice].weight = 0.0004 // 4e-4 uS = 0.4 nS
+
+proto_dir="bAPinhibspine"
+proto_num=3
+run_model()
+
+// turn spine inhib off
+NCcur[spine_choice].weight = 0.0
+
+// 5) bAP + inhib in dend    //////////////////////////////////
+
+// bAP left on from above, turn dend inhib on
+// turn on conductance in the adjacent dendrite at the location of Spine[1] (used to be [2] at 181/L)
+// at 10 times the conductance
+NCcur[0].weight = 0.004 // 4 nS
+
+proto_dir="bAP10xinhibdend"
+proto_num=4
+run_model()
+
+// leave bAP on and turn down dend inhib
+// 5) bAP + inhib in dend    //////////////////////////////////
+
+// bAP left on from above, turn dend inhib on
+// turn on conductance in the adjacent dendrite at the location of Spine[1] (used to be [2] at 181/L)
+// at 1 times the conductance
+NCcur[0].weight = 0.0004 // 4 nS
+
+proto_dir="bAP1xinhibdend"
+proto_num=5
+run_model()
+
+// turn bAP off, leave dend inhib on
+MultIClamp[0].number=0 // turn off current injection that creates bAP
+// turn on conductance in the adjacent dendrite at the location of Spine[1] (used to be [2] at 181/L)
+// at 1 times the conductance
+NCcur[0].weight = 0.0004 // 4 nS
+
+proto_dir="1xinhibdend"
+proto_num=6
+run_model()
+
+// add case with spine inhibition and ECL=-40 (no bAP as above)
+save_reversal_potential = Exp2SynCur[spine_choice].e
+Exp2SynCur[spine_choice].e = -40
+// dendritie inhibition off
+NCcur[0].weight = 0.0 // 4 nS
+// spine inhibition on
+NCcur[spine_choice].weight = 0.0004 // 4e-4 uS = 0.4 nS
+proto_dir="spineinhibEClm40"
+proto_num=7
+run_model()
+// restore ECl reversal potential
+Exp2SynCur[spine_choice].e = save_reversal_potential
+
+// turn bAP on and turn off spine inhib to leave in default mode
+MultIClamp[0].number=1 // turn on current injection that creates bAP
+// dend and spine inhibition off
+NCcur[0].weight = 0.0
+NCcur[spine_choice].weight = 0.0 // 4e-4 uS = 0.4 nS

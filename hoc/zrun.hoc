@@ -1,0 +1,138 @@
+// zrun.hoc
+// calculates the impedance of the model at specified 
+// frequency, delta_t, compartment list
+// $1,      , $2,      $o3
+// Needs to have the number of compartments specified in
+// advance so that the number of vectors for recording the
+// time varying impedances are available.
+// Tom Morse and Ted Carnevale
+
+
+objref imp // impedance object
+imp = new Impedance()
+
+num_of_zvecs = 4 // record the impedances in multiple places
+// 0 -> dendrite compartment adjacent to the inhibited spine
+// 1 -> an uninhibited spine
+// 2 -> an inhibited spine
+// 3 -> an uninhibited spine
+
+objref zvec[num_of_zvecs]
+for i=0, num_of_zvecs-1 {
+  zvec[i] = new Vector()
+}
+
+objref tvec
+tvec = new Vector() // place to store time points corresponding to impedances
+
+// note that t_vec is used in the spiny dendrite model for graphing other qtys
+
+objref seclist
+seclist = new SectionList()
+
+objref x_location
+x_location = new Vector()
+
+x_location.append(adjacent_shaft_x_loc, 0.5, 0.5, 0.5)
+
+dendrite seclist.append()
+Spine[0].head seclist.append()
+Spine[1].head seclist.append()
+Spine[2].head seclist.append()
+
+proc append_zvec() { local i
+  // frequency $1, section list $o2
+  i=0
+  forsec $o2 {
+    imp.loc(x_location.x[i])
+    imp.compute($1, 1)
+    zvec[i].append(imp.input(x_location.x[i]))
+    i += 1
+  }
+  tvec.append(t)
+}
+
+// typical parameters
+frequency = 100
+delta_t = 1
+
+proc tables_off() {
+  usetable_na = 0
+  usetable_kv = 0
+}
+
+proc tables_on() {
+  usetable_na = 1
+  usetable_kv = 1
+}
+
+proc zrun_no_table() { local i
+// no table is actually "no table changes" in the sense of
+// changing usetable_kv or usetable_na values
+//  tables_off()
+  // frequency, delta_t, compartment list
+  // $1,      , $2,      $o3
+   for i = 0, num_of_zvecs-1 {
+    zvec[i] = new Vector()
+  }
+  tvec = new Vector()
+  stdinit()
+  append_zvec($1, $o3)
+  // {continuerun(t + 100) stoprun=1}
+  while (t < tstop) {
+    {continuerun(t + $2) stoprun=1}
+    // print "hi there ",t
+    //if (t>=90) append_zvec($1, $o3) 
+    append_zvec($1, $o3) 
+  }
+//  tables_on()
+}
+
+proc zrun() { local i
+  tables_off()
+  // frequency, delta_t, compartment list
+  // $1,      , $2,      $o3
+   for i = 0, num_of_zvecs-1 {
+    zvec[i] = new Vector()
+  }
+  tvec = new Vector()
+  stdinit()
+  append_zvec($1, $o3)
+  // {continuerun(t + 100) stoprun=1}
+  while (t < tstop) {
+    {continuerun(t + $2) stoprun=1}
+    // print "hi there ",t
+    //if (t>=90) append_zvec($1, $o3) 
+    append_zvec($1, $o3) 
+  }
+  tables_on()
+}
+// tstop=140
+// zrun(100, 1, seclist)
+// objref nil
+// zrun(100, 10, nil)
+objref zgraphs, zgraph[num_of_zvecs]
+zgraphs = new VBox()
+zgraphs.intercept(1)
+for i=0, num_of_zvecs-1 {
+  zgraph[i] = new Graph()
+}
+zgraphs.intercept(0)
+zgraphs.map()
+i=0
+strdef tmpstr1,tmpstr2
+forsec seclist {
+  tmpstr1=secname()
+  // sprint(tmpstr2,"impedance for %s at location %g at frequency %g",tmpstr1,x_location.x[i], frequency)
+  sprint(tmpstr2,"impedance for %s at location %g",tmpstr1,x_location.x[i])
+  zgraph[i].label(.05,.95, tmpstr2)
+  i += 1
+}
+color_incrementer=0
+proc graphz() {
+  color_incrementer += 1
+  for i=0, num_of_zvecs-1 {
+    zvec[i].line(zgraph[i], tvec, color_incrementer, 0)
+    zgraph[i].exec_menu("View = plot")
+  }
+}

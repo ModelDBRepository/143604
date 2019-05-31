@@ -1,0 +1,75 @@
+// init_figs.hoc
+// declare objects, procedures, and variables used to generate figs
+
+// first switch to high neck resistance state:
+// forsec "neck" {diam=0.05} // this is one way to match the most extreme 
+                             // inhibition observed experimentally
+forsec "neck" {diam=0.07} // makes model match many experiments
+forsec "neck" {Ra=200}
+
+objref fig0, fig1, fig2, fig3, fig4ca, fig4v
+fig0 = new Graph(0)
+fig1 = new Graph(0)
+fig2 = new Graph(0)
+fig3 = new Graph(0)
+fig4ca = new Graph(0)
+fig4v = new Graph(0)
+
+strdef tmpstr, tmpstr1
+objref strfunc
+strfunc = new StringFunctions()
+
+objref head1_cai_vec, head2_cai_vec, head0_cai_vec
+objref dend_v_vec, dend_cai_vec
+objref head1_v_vec, head2_v_vec, head0_v_vec
+objref t_vec
+t_vec = new Vector()
+// variable time step was turned off for a uniform displayable vector
+t_vec.indgen(0, tstop, dt)
+
+spine_choice = 2 // spine_choice = 2 corresponds to Spine[1]
+// record vectors for publication graph preparation
+objref neck_diam_vec
+
+func min() {
+  if ($1<$2) {
+        return $1
+    } else {
+        return $2
+    }
+}
+enable_write_dat=0 // turn to -1 (true) to write dat files as well as text
+proc write_vec() { local i
+  // supply strdef file_name, and two vectors of same size
+  hoc_obj_[0] = $o3 // column 2
+  hoc_obj_[1] = $o2 // column 1 in below clipboard_save function from stdlib.hoc
+  if (enable_write_dat) {
+    clipboard_file = new File()
+    if (clipboard_file[0].wopen($s1)) {
+      clipboard_file[0].printf("label:%s\n%d\n", hoc_obj_[0].label, hoc_obj_[0].size)
+      for i=0, min(hoc_obj_[0].size, hoc_obj_[1].size)-1 {
+        clipboard_file[0].printf("%g\t%g\n", hoc_obj_[1].x[i], hoc_obj_[0].x[i])
+      }
+      clipboard_file[0].close()
+    }
+  }
+// now for same with .txt instead of .dat for text file version without
+// neuron vector info
+  i = strfunc.substr($s1, ".dat")
+/* index = strobj.substr(s1, s2)
+DESCRIPTION
+Return the index into s1 of the first occurrence of s2. If s2 isn't a substring then the return value is -1.
+*/
+  if (i == -1) ( i = strfunc.len($s1) )
+  tmpstr = $s1
+  strfunc.left(tmpstr, i)
+  sprint(tmpstr1,"%s.txt",tmpstr)
+// repeat of above without the name and size lines NEURON writes for a vector
+  clipboard_file = new File()
+  if (clipboard_file[0].wopen(tmpstr1)) {
+      for i=0, min(hoc_obj_[0].size,hoc_obj_[1].size)-1 {
+        clipboard_file[0].printf("%g\t%g\n", hoc_obj_[1].x[i], hoc_obj_[0].x[i])
+      }
+    clipboard_file[0].close()
+  }
+}

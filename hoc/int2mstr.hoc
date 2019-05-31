@@ -1,0 +1,9 @@
+strdef mstr
+// proc acts like a function only sets global mstr
+proc int2mstr() {
+  if ($1<=0) {
+    sprint(mstr,"m%d",abs($1))
+  } else {
+    sprint(mstr,"%d",$1)
+  }
+}

@@ -1,0 +1,7 @@
+ParmFitness: Unnamed multiple run protocol
+	FitnessPrimitive: Ratio Fitness
+		ratio_fitness()
+
+	Parameters:
+		"global_cm", 0.91792, 0.01, 0.75, 1, 1
+End ParmFitness

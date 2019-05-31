@@ -1,0 +1,224 @@
+// paper_fig_buttons.hoc
+
+demo_mode=1 // true(1) then dt=.05, otherwise when false(0), dt=.025
+xpanel("Chiu et al. 2013")
+  xlabel("Demonstrations of main result and access to research panels")
+  xlabel("Click on a button to run demos (1,2) or load research panel environment (3)")
+  xbutton("1) spine inhibiton with bAP (compartmentalized inhibition)","spineinhib_bAP_demo()")
+  xbutton("2) 10x dend inhib with bAP (widespread inhib with smaller change in amplitude)","dend10x_bAP_demo()")
+  xbutton("3) load research panels","load_research_panels()")
+  xbutton("Quit","quit()")
+  xlabel("Demo mode has dt=.1 ms, otherwise dt=0.025")
+  xlabel("Switch off for more accurate (and time consuming) simulation runs:")
+  xstatebutton("Demo mode",&demo_mode, "toggle_time_step()")
+xpanel(400,400)
+
+objref pwm
+pwm=new PWManager()
+// a small delay helps window manager on mac os x catch up
+for j=1,1e7 { wait=1 } // a
+// otherwise all the windows do not hide consistently on each start
+proc hider() {
+  for (counter=pwm.count()-1;counter>1;counter-=1) {
+    // print " hiding number ",counter
+    pwm.hide(counter)
+    doNotify()
+  }
+  pwm.map(pwm.count()-1) // show the demo choice menu window
+}
+
+hider()
+
+/**/
+// use pw.map(index), and pw.hide(index) to display/hide windows as desired
+// note a hide and then a map of the same index can bring that window to the front
+
+// the following are used here (below) in demo_choice or multiconditions (first choice in research panel)
+load_file("multi_cond_declare_vecs.hoc")
+load_file("multi_cond_setup_vecs.hoc")
+
+// a horizontal box, for calcium (CaBox)
+objref CaBox
+// the inhibited spine is in the middle of spines proximal and distal to the soma
+// the recorded dendritic location is adjacent to the inhibited spine
+objref proxSpineCaGraph, inhibSpineCaGraph, distalSpineCaGraph, dendCaGraph
+objref VGraph
+
+proc spineinhib_bAP_demo() {
+  print " "
+  print "Running model twice: first with bAP, secondly with spineinhib and bAP"
+  print "graph amplitudes of Ca signal and voltages for inhibited spine"
+  print "an uninhibited spine neighbor, and the dendritic shaft"
+  print " "
+
+  print "Starting bAP (alone) protocol"
+  // set protocol
+  // turn inhibition off in case happens to be on
+  for cntr=0,3 {
+    NC[cntr].weight = 0.0 // 4e-4 uS = 0.4 nS
+  }
+  // turn on bAP
+  MultIClamp[0].number=1 // turn on current injection that creates bAP
+
+  // setup vectors to record
+  setup_vectors_to_record()
+  // run model
+  init()
+  run()
+
+  // graph bAP alone (control) results
+  // panels can have 
+  // Ca traces on top row (middle spine, neighbor spine, dendrite)
+  // paired (spine inhib and bAP) case V traces in seperate graph (the control case of bAP alone
+  // looks similar to the higher traces in the paired case).
+  //
+
+  CaBox = new HBox()
+  CaBox.intercept(1)
+    proxSpineCaGraph = new Graph()
+      spine0_cai_vec.line(proxSpineCaGraph, t_vec, 4, 1) // green for proximal spine
+    inhibSpineCaGraph = new Graph()
+      spine1_cai_vec.line(inhibSpineCaGraph, t_vec, 7, 1) // purple for middle
+    distalSpineCaGraph = new Graph()
+      spine2_cai_vec.line(distalSpineCaGraph, t_vec, 3, 1)// blue for distal 
+    dendCaGraph = new Graph()
+      dend_cai_vec.line(dendCaGraph, t_vec, 1, 1) // black for dendrite
+  // leave box intercept open to graph the inhibition experiment
+  
+  print "Halfway done."
+  print "Starting spineinhib and bAP protocol"
+  // initialize and setup vectors to record
+  setup_vectors_to_record()
+
+  // set protocol
+  // middle spne inhibition:
+  NC[spine_choice].weight = 0.0004 // 4e-4 uS = 0.4 nS
+  // (leave bAP on)
+  
+  // run model
+  init()
+  run()
+  
+  // Graph results
+  // Display the V, Ca traces for the inhibited spine and the uninhibited neighboring spine and adjacent dendrite
+  // Use dashed red line for these on top of solid black line for bAP alone.
+    spine0_cai_vec.line(proxSpineCaGraph, t_vec,2, 7)
+    spine1_cai_vec.line(inhibSpineCaGraph, t_vec,2, 7)
+    spine2_cai_vec.line(distalSpineCaGraph, t_vec,2,7)
+    dend_cai_vec.line(dendCaGraph, t_vec,2,7)
+
+    proxSpineCaGraph.exec_menu("View = plot")
+    inhibSpineCaGraph.exec_menu("View = plot")
+    distalSpineCaGraph.exec_menu("View = plot")
+    dendCaGraph.exec_menu("View = plot")
+
+  CaBox.intercept(0)
+  CaBox.map("[Ca2+] in prox., middle (inhib), distal spine neighbors, and adjacent dend. compartment to middle spine", 8, 229, 1220.16, 231.36)
+
+  VGraph = new Graph(0)
+  spine0_v_vec.line(VGraph, t_vec, 4, 1) // green for prox
+  spine1_v_vec.line(VGraph, t_vec, 2, 1) // red for inhib
+  spine2_v_vec.line(VGraph, t_vec, 3, 1) // blue for dist
+  dend_v_vec.line(VGraph, t_vec, 1, 1) // black for prox
+  VGraph.view(113, -70, 6, 75, 100, 500, 400, 300)
+  //.view(mleft, mbottom, mwidth, mheight, wleft, wtop, wwidth, wheight)
+  // VGraph.exec_menu("View = plot")
+  print "Finished."
+  print " "
+}
+proc dend10x_bAP_demo() {
+  print "running model twice: first with  bAP, secondly with dend10xinhib and bAP"
+  print "graph amplitudes of Ca signal and voltages for adjacent spine to dend inhibition"
+  print "an spine neighbor, and the inhibited dendritic shaft"
+  print " "
+  print "Starting bAP (alone) protocol"
+  // setup vectors to record
+  setup_vectors_to_record()
+
+  // set protocol
+  // turn off any dendritic (0) and spine (1-3) inhibition
+  for i=0,3 {
+    NC[i].weight = 0.0
+  }
+  // turn on bAP
+  MultIClamp[0].number=1 // turn on current injection that creates bAP
+
+  // run model
+  init()
+  run()
+
+  // graph results
+  // graph bAP alone (control) results
+  // panels can have 
+  // Ca traces on top row (middle spine, neighbor spine, dendrite)
+  // paired (spine inhib and bAP) case V traces in seperate graph (the control case of bAP alone
+  // looks similar to the higher traces in the paired case).
+  //
+
+  CaBox = new HBox()
+  CaBox.intercept(1)
+    proxSpineCaGraph = new Graph()
+      spine0_cai_vec.line(proxSpineCaGraph, t_vec, 4, 1) // green for proximal spine
+    inhibSpineCaGraph = new Graph()
+      spine1_cai_vec.line(inhibSpineCaGraph, t_vec, 7, 1) // purple for middle
+    distalSpineCaGraph = new Graph()
+      spine2_cai_vec.line(distalSpineCaGraph, t_vec, 3, 1)// blue for distal 
+    dendCaGraph = new Graph()
+      dend_cai_vec.line(dendCaGraph, t_vec, 1, 1) // black for dendrite
+  // leave box intercept open to graph the inhibition experiment
+
+  print "Halfway done."
+  print "Starting bAP and dend10xinhib protocol"
+  
+// setup vectors to record
+  setup_vectors_to_record()
+  // set protocol
+  // turn on conductance in the adjacent dendrite compartment to Spine[1].neck
+  // at 10 times the conductance
+  NC[0].weight = 0.004 // 4 nS
+    
+  // run model
+  init()
+  run()
+  // graph results
+  // Display the V, Ca traces for the neighboring spines and 10x inhib adjacent dend
+  // Use dashed red line for these on top of solid black line for bAP alone.
+    spine0_cai_vec.line(proxSpineCaGraph, t_vec,2, 7)
+    spine1_cai_vec.line(inhibSpineCaGraph, t_vec,2, 7)
+    spine2_cai_vec.line(distalSpineCaGraph, t_vec,2,7)
+    dend_cai_vec.line(dendCaGraph, t_vec,2,7)
+
+    proxSpineCaGraph.exec_menu("View = plot")
+    inhibSpineCaGraph.exec_menu("View = plot")
+    distalSpineCaGraph.exec_menu("View = plot")
+    dendCaGraph.exec_menu("View = plot")
+
+  CaBox.intercept(0)
+  CaBox.map("[Ca2+] in prox., middle, distal spine neighbors, and adjacent 10x inhib dend. compartment to middle spine", 8, 229, 1220.16, 231.36)
+
+  VGraph = new Graph(0)
+  spine0_v_vec.line(VGraph, t_vec, 4, 1) // green for prox
+  spine1_v_vec.line(VGraph, t_vec, 2, 1) // red for inhib
+  spine2_v_vec.line(VGraph, t_vec, 3, 1) // blue for dist
+  dend_v_vec.line(VGraph, t_vec, 1, 1) // black for prox
+  VGraph.view(113, -70, 6, 75, 100, 500, 400, 300)
+
+  print "Finished."
+}
+
+proc load_research_panels() {
+  // hiding first will bring window to front when map'ed if window already map'ed
+  pwm.hide(12)
+  pwm.map(12)
+}
+
+proc toggle_time_step() {
+  if (demo_mode) {
+    steps_per_ms = 10 // could also do 20 and 0.05 dt
+    dt = 0.10
+  } else {
+    steps_per_ms = 40
+    dt = 0.025
+  }
+}
+toggle_time_step() // set to demo_mode to start

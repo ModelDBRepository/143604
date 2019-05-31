@@ -1,0 +1,9 @@
+ParmFitness: Unnamed multiple run protocol
+	FitnessPrimitive: Spine1 inhib, Spine0 not inhib error fnc
+		s1_inhib_s0_not_error()
+
+	Parameters:
+		"dendritic_inhibition_factor", 5, 1, 100, 1, 1
+		"calcium_conductance_factor", 1, 1, 3000, 1, 1
+		"spine1_neck_diam", 0.07, 0.001, 0.2, 1, 1
+End ParmFitness

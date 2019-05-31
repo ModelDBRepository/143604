@@ -1,0 +1,33 @@
+// dendrite_morphology.hoc
+// create a simple dendrite to which spines can be added.
+
+create dendrite
+
+// study convergence of number of nodes (nseg) later
+// for now use a large nseg because model is simple anyway
+// (computationally small cost)
+dendrite { L=600 nseg=1200 }
+// dendrite { L=200 nseg=200 }  // AP grow in height along dend so use 600
+dendrite { insert pas }
+
+start_diam=3
+// for visualization
+const_diam = .7 // >=1.395 one AP // diam <1.39 E_Cl fig3 gets two or more APs
+start_diam=const_diam
+
+end_diam=const_diam
+
+dendrite for(x,0) { diam(x)=start_diam*(1-x) + end_diam*x }
+
+// create soma 
+// // connect the 1 end of the soma to the 0 end of the dendrite
+// soma connect dendrite(0), 1
+// soma { L=5 diam=5 }
+// soma { insert pas }
+
+// this function supplied in case want to study tapering of dendrite:
+proc readjust_dend_diam() {
+  start_diam=$1
+  end_diam=$2
+  dendrite for(x,0) { diam(x)=start_diam*(1-x) + end_diam*x }
+}

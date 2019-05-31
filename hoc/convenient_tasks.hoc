@@ -1,0 +1,12 @@
+// convenient_tasks.hoc
+
+proc reset_g() {
+  // If the simulation is stopped with a conductance turned on and
+  // vector play is then removed, the conductance will stay on.
+  // It makes sense therefor to reset all the conductances to 0 when ever
+  // vector play_remove() is called
+  for i=0, esyn_list.count()-1 {  // esyn_list, isyn_list have same count
+    excitatory[i].gmax=0
+    inhibitory[i].gmax=0
+  }
+}

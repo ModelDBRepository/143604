@@ -1,0 +1,131 @@
+// run_impedance_study.hoc
+// runs impedance tool to study effects on impedance of
+// spiny dendrite parameters
+
+// below equivalent to nrnmainmenu->Tools->Impedance->log(A) vs x
+load_file("logax.hoc")
+makelogax()
+
+// below code equivalent to selecting from Impedance tool menu:
+// Plot -> Zin (Mohm)
+object_push(LogAvsX[0])
+style(1)
+object_pop()
+
+Graph[2].exec_menu("View = plot") // fits impedance plot in graph
+
+// show results for frequencies of 0 (DC), 100, 300, 1000
+// for each frequency show impedance without conductance in black
+// and with conductance in red
+
+objref freq_vec
+freq_vec = new Vector()
+freq_vec.append(0, 100, 300, 1000)
+
+// graphical observations with impedance tool are stored in g_imp Graph
+
+objref g_imp
+g_imp = new Graph() // used to store results of impedance tool
+objref raw_imp_graph
+raw_imp_graph = Graph[2] // the lowest Graph on the impedance tool
+
+objref tmp_xvec_, tmp_yvec_
+tmp_xvec_ = new Vector()
+tmp_yvec_ = new Vector()
+gindex=-1 // used to transfer over all the lines from the impedance tool graph
+colorindex=1 // start on black
+strdef tmpstr
+early_stop=1
+proc run_freqs() {  // pass optional argument of graph object as $o1
+  for findex=0, freq_vec.size()-1 {
+    init()
+    sprint(tmpstr, "freq=%d",freq_vec.x[findex])
+    execute(tmpstr, LogAvsX[0])
+    execute("draw()",LogAvsX[0])
+    // transfer over the initialized impedance tools as black lines
+    for (gindex=-1; (gindex=raw_imp_graph.getline(gindex, tmp_xvec_, tmp_yvec_)) != -1; ){
+       tmp_yvec_.label("")
+       if (numarg()>0) {
+         tmp_yvec_.line($o1, tmp_xvec_, 1, 1) // thin black line
+       } else {
+         tmp_yvec_.line(g_imp, tmp_xvec_, 1, 1) // thin black line
+       }
+    }
+    // now run the model to where the conductances are turned on
+    continuerun(early_stop) // it is assumed that the model is setup to have conductances at t=1ms
+    // refresh graph in impedance tool
+    execute("draw()",LogAvsX[0])
+    // transfer over the conductance state impedance tool lines as red lines
+    colorindex=2
+    for (gindex=-1; (gindex=raw_imp_graph.getline(gindex, tmp_xvec_, tmp_yvec_)) != -1; ){
+       // print "transfering line index: ",gindex," as a red line. Vector label is ",tmp_yvec_.label()
+       tmp_yvec_.label("")
+       if (numarg()>0) {
+         tmp_yvec_.line($o1, tmp_xvec_, colorindex,8) // dashed red lines
+       } else {
+         tmp_yvec_.line(g_imp, tmp_xvec_, colorindex,8) // dashed red lines
+       }
+       colorindex+=1
+    }
+  }
+  if (numarg()>0) {
+    $o1.exec_menu("View = plot")
+  } else {
+    g_imp.exec_menu("View = plot")
+  }
+}
+// this modification of run_freqs attempts to compare two impedance 
+// snapshots with active intrinsic currents with and without a synaptic current
+proc run_freqs2() {  // pass optional argument of graph object as $o1
+  for findex=0, freq_vec.size()-1 {
+    // *** important note: look up how to check the include dstate/dt box in impedance tool
+    init()
+    // g_vec.play_remove()
+    early_stop=4.325-.5
+    continuerun(early_stop)
+    sprint(tmpstr, "freq=%d",freq_vec.x[findex])
+    execute(tmpstr, LogAvsX[0])
+    execute("draw()",LogAvsX[0])
+    // transfer over the initialized impedance tools as black lines
+    for (gindex=-1; (gindex=raw_imp_graph.getline(gindex, tmp_xvec_, tmp_yvec_)) != -1; ){
+       tmp_yvec_.label("")
+       if (numarg()>0) {
+         tmp_yvec_.line($o1, tmp_xvec_, 1, 1) // thin black line
+       } else {
+         tmp_yvec_.line(g_imp, tmp_xvec_, 1, 1) // thin black line
+       }
+    }
+    // turn the conductances back on
+//  these should now be done with some ZoidSyn[spine_index].number=1 assignment
+    print "this is the location that the inhibitory synapse should be turned on - update this code when desired"
+//    instead of the below
+//    g_vec.play_remove()
+//    g_vec.play(&spine_head_inhib.g, t_vec)
+//    reset_g() 
+   // or
+    // place_inhib_on_shaft()
+    // now run the model to where the conductances are turned on
+    init()
+    continuerun(early_stop) // it is assumed that the model is setup to have conductances at t=1ms
+    // refresh graph in impedance tool
+    execute("draw()",LogAvsX[0])
+    // transfer over the conductance state impedance tool lines as red lines
+    colorindex=2
+    for (gindex=-1; (gindex=raw_imp_graph.getline(gindex, tmp_xvec_, tmp_yvec_)) != -1; ){
+       // print "transfering line index: ",gindex," as a red line. Vector label is ",tmp_yvec_.label()
+       tmp_yvec_.label("")
+       if (numarg()>0) {
+         tmp_yvec_.line($o1, tmp_xvec_, colorindex,8) // dashed red lines
+       } else {
+         tmp_yvec_.line(g_imp, tmp_xvec_, colorindex,8) // dashed red lines
+       }
+       colorindex+=1
+    }
+  }
+  if (numarg()>0) {
+    $o1.exec_menu("View = plot")
+  } else {
+    g_imp.exec_menu("View = plot")
+  }
+}
+run_freqs()  // or {new_graph = new Graph() run_freqs(new_graph)}

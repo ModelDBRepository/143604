@@ -1,0 +1,9 @@
+ParmFitness: Unnamed multiple run protocol
+	FitnessPrimitive: (dend_dCa_ratio-0.85)^2
+		dend_inhib_error()
+
+	Parameters:
+		"dendritic_inhibition_factor", 1, 1e-09, 1e+09, 0, 1
+		"calcium_conductance_factor", 1, 1e-09, 1e+09, 0, 1
+		"dendrite.gbar_na", 28, 0.001, 10000, 1, 1
+End ParmFitness
